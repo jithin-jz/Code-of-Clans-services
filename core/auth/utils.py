@@ -4,8 +4,16 @@ import hashlib
 import hmac
 import time
 import requests
+import random
+import string
 from datetime import datetime, timedelta, timezone
 from django.conf import settings
+
+
+def generate_otp_code(length=4):
+    """Generate a numeric OTP code."""
+    return ''.join(random.choices(string.digits, k=length))
+
 
 
 def generate_access_token(user):

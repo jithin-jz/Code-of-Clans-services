@@ -25,6 +25,7 @@ class UserProfile(models.Model):
         ('github', 'GitHub'),
         ('google', 'Google'),
         ('discord', 'Discord'),
+        ('email', 'Email OTP'),
         ('local', 'Local/Admin'),
     ]
 

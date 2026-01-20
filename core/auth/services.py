@@ -4,9 +4,12 @@ from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 import requests
+from datetime import datetime, timedelta, timezone
 from users.models import UserProfile
+from .models import EmailOTP
 from .utils import (
     generate_tokens,
+    generate_otp_code,
     get_github_access_token,
     get_github_user,
     get_github_user_email,
@@ -16,7 +19,7 @@ from .utils import (
     get_discord_access_token,
     get_discord_user,
 )
-from .emails import send_welcome_email
+from .emails import send_welcome_email, send_otp_email
 
 logger = logging.getLogger(__name__)
 
@@ -272,3 +275,118 @@ class AuthService:
             username = f"{base_username}_{counter}"
             counter += 1
         return username
+
+
+    @staticmethod
+    def request_otp(email):
+        """
+        Generates and sends an OTP to the given email.
+        """
+        email = email.lower().strip()
+        otp_code = generate_otp_code()
+        
+        # Save OTP to DB (update existing or create new)
+        # We can just create a new record, or update latest. 
+        # For simplicity, create new and optionally cleanup old ones later or use expiration.
+        EmailOTP.objects.create(email=email, otp=otp_code)
+        
+        # Send Email
+        send_otp_email(email, otp_code)
+        
+        return True
+
+    @staticmethod
+    def verify_otp(email, otp):
+        """
+        Verifies the OTP and logs the user in (or creates them).
+        """
+        logger.info(f"Verifying OTP for {email} with code {otp}")
+        
+        email = email.lower().strip()
+        otp = otp.strip()
+        
+        # Find the OTP
+        # Check for OTPs created in the last 10 minutes
+        expiry_time = datetime.now(timezone.utc) - timedelta(minutes=10)
+        
+        try:
+            # Debug log
+            logger.info(f"Looking for OTP: email={email}, otp={otp}, created_at__gte={expiry_time}")
+            
+            otp_record = EmailOTP.objects.filter(
+                email__iexact=email, 
+                otp=otp, 
+                created_at__gte=expiry_time
+            ).latest('created_at')
+            
+            logger.info(f"OTP Record found: {otp_record}")
+            
+        except EmailOTP.DoesNotExist:
+            logger.warning(f"OTP not found or expired for {email}")
+            # Debug: check if any OTP exists for this email
+            recent_otps = EmailOTP.objects.filter(email__iexact=email).values('otp', 'created_at')
+            logger.warning(f"Recent OTPs for this email: {list(recent_otps)}")
+            
+            return None, {'error': 'Invalid or expired OTP.'}
+            
+        # Valid OTP. Now get or create user.
+        try:
+            with transaction.atomic():
+                user = User.objects.filter(email__iexact=email).first()
+                
+                if not user:
+                    logger.info(f"Creating new user for {email}")
+                    # Create New User
+                    username = email.split('@')[0]
+                    username = AuthService._generate_unique_username(username)
+                    
+                    user = User.objects.create_user(
+                        username=username,
+                        email=email
+                    )
+                    
+                    # NOTE: A post_save signal in users/models.py might have already created a profile 
+                    # with provider='local'. We should check and update it, or create if missing.
+                    if hasattr(user, 'profile'):
+                        profile = user.profile
+                        profile.provider = 'email'
+                        profile.provider_id = email
+                        profile.save()
+                    else:
+                        UserProfile.objects.create(
+                            user=user,
+                            provider='email', 
+                            provider_id=email, 
+                            access_token='',
+                            refresh_token=''
+                        )
+                        
+                    # Send welcome email for new user?
+                    send_welcome_email(user)
+                
+                else:
+                    logger.info(f"Found existing user {user.username} for {email}")
+                    # User exists. Check/Update profile?
+                    if not hasattr(user, 'profile'):
+                         UserProfile.objects.create(
+                            user=user,
+                            provider='email',
+                            provider_id=email,
+                            access_token='',
+                            refresh_token=''
+                        )
+                
+                # Helper: Delete used OTP to prevent replay?
+                otp_record.delete()
+                
+                # Generate Tokens
+                tokens = generate_tokens(user)
+                
+            if not user.is_active:
+                 return None, {'error': 'User account is disabled.'}
+                 
+            return user, tokens
+            
+        except Exception as e:
+            logger.exception(f"Error during user creation/login in verify_otp: {e}")
+            return None, {'error': 'Internal server error during login.'}

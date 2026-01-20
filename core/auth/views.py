@@ -8,7 +8,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from users.serializers import UserSerializer
-from .serializers import RefreshTokenSerializer, AdminLoginSerializer, OAuthCodeSerializer, OAuthURLSerializer
+from .serializers import (
+    RefreshTokenSerializer, 
+    AdminLoginSerializer, 
+    OAuthCodeSerializer, 
+    OAuthURLSerializer,
+    OTPRequestSerializer,
+    OTPVerifySerializer
+)
 from .services import AuthService
 from .utils import generate_access_token, decode_token, generate_tokens
 
@@ -239,5 +246,55 @@ class AdminLoginView(APIView):
         return Response({
             'access_token': tokens['access_token'],
             'refresh_token': tokens['refresh_token'],
+            'user': UserSerializer(user, context={'request': request}).data
+        })
+
+
+# --- OTP Views ---
+
+class OTPRequestView(APIView):
+    """
+    Step 1 of Email OTP Login: Request a One-Time Password.
+    Accepts: { "email": "user@example.com" }
+    """
+    permission_classes = [AllowAny]
+    serializer_class = OTPRequestSerializer
+    
+    def post(self, request):
+        serializer = OTPRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        email = serializer.validated_data['email']
+        AuthService.request_otp(email)
+        
+        return Response({'message': 'OTP sent successfully'})
+
+
+class OTPVerifyView(APIView):
+    """
+    Step 2 of Email OTP Login: Verify the One-Time Password.
+    Accepts: { "email": "user@example.com", "otp": "123456" }
+    Returns: { "access_token": "...", "user": {...} }
+    """
+    permission_classes = [AllowAny]
+    serializer_class = OTPVerifySerializer
+    
+    def post(self, request):
+        serializer = OTPVerifySerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        email = serializer.validated_data['email']
+        otp = serializer.validated_data['otp']
+        
+        user, result = AuthService.verify_otp(email, otp)
+        
+        if not user:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+            
+        return Response({
+            'access_token': result['access_token'],
+            'refresh_token': result['refresh_token'],
             'user': UserSerializer(user, context={'request': request}).data
         })

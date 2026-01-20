@@ -48,3 +48,38 @@ def send_welcome_email(user):
     except Exception:
         # Log full traceback if email sending fails
         logger.exception("Failed to send welcome email to %s", user.email)
+
+
+def send_otp_email(email, otp):
+    """
+    Send an OTP email for login verification.
+    """
+    subject = "Your Login Code - Code of Clans"
+    
+    try:
+        context = {"otp": otp}
+        
+        # HTML Message
+        html_message = render_to_string("emails/otp_login.html", context)
+        
+        # Plain Text Fallback
+        message = (
+            f"Hello,\n\n"
+            f"Your login code for Code of Clans is: {otp}\n\n"
+            f"This code will expire in 10 minutes.\n"
+            f"If you didn't request this code, please ignore this email."
+        )
+        
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email="Code of Clans <noreply@codeofclans.com>",
+            recipient_list=[email],
+            fail_silently=False,
+            html_message=html_message,
+        )
+        logger.info("OTP email sent to %s", email)
+        
+    except Exception:
+        logger.exception("Failed to send OTP email to %s", email)
+

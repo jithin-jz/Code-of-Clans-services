@@ -9,7 +9,9 @@ from .views import (
     RefreshTokenView,
     LogoutView,
     DeleteAccountView,
-    AdminLoginView
+    AdminLoginView,
+    OTPRequestView,
+    OTPVerifyView
 )
 
 urlpatterns = [
@@ -26,8 +28,13 @@ urlpatterns = [
     path('discord/callback/', DiscordCallbackView.as_view(), name='discord_callback'),
     
     # Auth endpoints
+    # Auth endpoints
     path('refresh/', RefreshTokenView.as_view(), name='refresh_token'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('user/delete/', DeleteAccountView.as_view(), name='delete_account'),
     path('admin/login/', AdminLoginView.as_view(), name='admin_login'),
+    
+    # Email OTP endpoints
+    path('otp/request/', OTPRequestView.as_view(), name='otp_request'),
+    path('otp/verify/', OTPVerifyView.as_view(), name='otp_verify'),
 ]

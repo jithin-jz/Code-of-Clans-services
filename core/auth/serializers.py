@@ -85,3 +85,14 @@ class OAuthCodeSerializer(serializers.Serializer):
 class OAuthURLSerializer(serializers.Serializer):
     """Serializer for returning the OAuth authorization URL."""
     url = serializers.URLField(help_text="Redirect URL for OAuth provider.")
+
+
+class OTPRequestSerializer(serializers.Serializer):
+    """Serializer for requesting an OTP."""
+    email = serializers.EmailField(required=True)
+
+
+class OTPVerifySerializer(serializers.Serializer):
+    """Serializer for verifying an OTP."""
+    email = serializers.EmailField(required=True)
+    otp = serializers.CharField(required=True, min_length=4, max_length=6)
