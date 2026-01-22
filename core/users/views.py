@@ -14,9 +14,7 @@ from .serializers import (
     RedeemReferralSerializer,
 )
 
-# Helper to handle file uploads
-# Helper to handle file uploads
-from auth.supabase_client import StorageService
+
 from xpoint.services import XPService
 
 
@@ -82,8 +80,16 @@ class ProfileUpdateView(APIView):
 
         profile.save()
 
+        # Generate new tokens to reflect updated claims (username/avatar)
+        from auth.utils import generate_tokens
+        tokens = generate_tokens(user)
+
+        data = UserSerializer(user, context={"request": request}).data
+        data['access_token'] = tokens['access_token']
+        data['refresh_token'] = tokens['refresh_token']
+
         return Response(
-            UserSerializer(user, context={"request": request}).data,
+            data,
             status=status.HTTP_200_OK,
         )
 
