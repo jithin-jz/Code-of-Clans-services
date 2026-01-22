@@ -72,6 +72,12 @@ class UserProfile(models.Model):
     github_username = models.CharField(max_length=100, blank=True, null=True)
     leetcode_username = models.CharField(max_length=100, blank=True, null=True)
 
+    # Customization
+    active_theme = models.CharField(max_length=50, default='vs-dark', help_text="Active Monaco Editor theme.")
+    active_font = models.CharField(max_length=50, default='Fira Code', help_text="Active Editor Font Family.")
+    active_effect = models.CharField(max_length=50, blank=True, null=True, help_text="Active Cursor Effect (e.g., 'fire', 'particles').")
+    active_victory = models.CharField(max_length=50, default='default', help_text="Active Victory Animation.")
+
     # Gamification & Referrals
     xp = models.IntegerField(default=0, help_text="Total Experience Points earned.")
     streak_freezes = models.IntegerField(

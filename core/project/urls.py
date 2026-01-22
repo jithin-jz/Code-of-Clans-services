@@ -12,6 +12,7 @@ urlpatterns = [
     path("api/rewards/", include("rewards.urls")),
     path("api/profiles/", include("users.urls")),
     path("api/payments/", include("payments.urls")),
+    path("api/store/", include("store.urls")),
     path("api/", include("challenges.urls")),
     # Swagger Documentation routes
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),

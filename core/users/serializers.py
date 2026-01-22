@@ -30,6 +30,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "github_username",
             "leetcode_username",
             "streak_freezes",
+            "active_theme",
+            "active_font",
+            "active_effect",
+            "active_victory",
         ]
 
     @extend_schema_field(bool)

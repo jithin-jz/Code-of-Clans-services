@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "users",
     "xpoint",
     "payments",
+    "store", # New App
     "challenges",
 ]
 

@@ -189,3 +189,50 @@ class ChallengeViewSet(viewsets.ModelViewSet):
     def _get_next_level_slug(self, current_challenge):
         next_challenge = Challenge.objects.filter(order__gt=current_challenge.order).order_by('order').first()
         return next_challenge.slug if next_challenge else None
+
+from django.db.models import Count, Q
+from rest_framework.views import APIView
+from users.models import UserProfile
+from django.contrib.auth.models import User
+
+class LeaderboardView(APIView):
+    """
+    Returns the global leaderboard based on completed challenges.
+    Ranked by:
+    1. Number of completed challenges (descending)
+    2. Total XP (descending)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Annotate users with the count of completed challenges
+        users = User.objects.annotate(
+            completed_count=Count(
+                'challenge_progress', 
+                filter=Q(challenge_progress__status='COMPLETED')
+            )
+        ).select_related('profile').filter(
+            is_active=True, 
+            is_staff=False, 
+            is_superuser=False
+        ).order_by('-completed_count', '-profile__xp')[:100]
+
+        data = []
+        for user in users:
+            # Handle cases where profile might be missing (though unlikely given select_related)
+            try:
+                profile = user.profile
+                avatar_url = profile.avatar.url if profile.avatar else None
+                xp = profile.xp
+            except UserProfile.DoesNotExist:
+                avatar_url = None
+                xp = 0
+
+            data.append({
+                'username': user.username,
+                'avatar': avatar_url,
+                'completed_levels': user.completed_count,
+                'xp': xp,
+            })
+            
+        return Response(data)
