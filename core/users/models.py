@@ -77,6 +77,9 @@ class UserProfile(models.Model):
     streak_freezes = models.IntegerField(
         default=0, help_text="Number of streak freezes available."
     )
+    reward_cycle_start_date = models.DateField(
+        null=True, blank=True, help_text="Start date of the current 7-day reward cycle."
+    )
     referral_code = models.CharField(
         max_length=12,
         unique=True,

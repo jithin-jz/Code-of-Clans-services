@@ -15,7 +15,7 @@ class CheckInView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = DailyCheckInSerializer
 
-    # XP rewards for each streak day (Day 1 -> 5 XP ... Day 7 -> 35 XP)
+    # XP rewards for each cycle day (Day 1 -> 5 XP ... Day 7 -> 35 XP)
     DAILY_REWARDS = {1: 5, 2: 10, 3: 15, 4: 20, 5: 25, 6: 30, 7: 35}
 
     def post(self, request):
@@ -37,44 +37,35 @@ class CheckInView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Move import to top generally, but for this snippet:
-        # Import here to avoid circular dependency
         from xpoint.services import XPService, StreakService
 
-        # ... (check existing_checkin logic) ...
+        # Get current cycle state
+        # cycle_day is 1-indexed (1-7)
+        cycle_day, cycle_start_date, is_reset = StreakService.get_cycle_state(user)
 
-        # Get the last check-in
-        last_checkin = DailyCheckIn.objects.filter(user=user).first()
-
-        # Calculate streak day using StreakService (handles freezes)
-        streak_day, freeze_used = StreakService.determine_next_streak(
-            user, last_checkin
-        )
-
-        # Get XP reward for this streak day
-        xp_reward = self.DAILY_REWARDS.get(streak_day, 5)
+        # Get XP reward for this cycle day
+        xp_reward = self.DAILY_REWARDS.get(cycle_day, 5)
 
         # Create check-in record
+        # Note: 'streak_day' field in model now represents 'cycle_day'
         checkin = DailyCheckIn.objects.create(
-            user=user, streak_day=streak_day, xp_earned=xp_reward
+            user=user, streak_day=cycle_day, xp_earned=xp_reward
         )
 
         # Update user's XP using centralized service
         XPService.add_xp(user, xp_reward, source=XPService.SOURCE_CHECK_IN)
-        profile = (
-            user.profile
-        )  # Refresh profile or just use the updated value returned if needed
+        profile = user.profile
 
         return Response(
             {
-                "message": f"Check-in successful! Day {streak_day} streak"
-                + (" (Streak Freeze Used!)" if freeze_used else ""),
+                "message": f"Check-in successful! Day {cycle_day} of cycle.",
                 "check_in": DailyCheckInSerializer(checkin).data,
                 "xp_earned": xp_reward,
                 "total_xp": profile.xp,
-                "streak_day": streak_day,
-                "streak_saved": freeze_used,
-                "freezes_left": user.profile.streak_freezes,
+                "streak_day": cycle_day,  # kept for frontend compatibility
+                "cycle_day": cycle_day,
+                "is_new_cycle": is_reset,
+                "cycle_start_date": cycle_start_date,
             },
             status=status.HTTP_201_CREATED,
         )
@@ -83,41 +74,41 @@ class CheckInView(APIView):
         """Get user's check-in status and history."""
         user = request.user
         today = timezone.now().date()
+        
+        from xpoint.services import StreakService
+
+        # Get current cycle state (this handles resetting if needed)
+        cycle_day, cycle_start_date, is_reset = StreakService.get_cycle_state(user)
 
         # Check today's check-in
         today_checkin = DailyCheckIn.objects.filter(
             user=user, check_in_date=today
         ).first()
 
-        # Get last check-in for streak calculation
-        last_checkin = DailyCheckIn.objects.filter(user=user).first()
-
-        # Calculate current streak
-        current_streak = 0
-        if last_checkin:
-            if (
-                last_checkin.check_in_date == today
-                or last_checkin.check_in_date == today - timedelta(days=1)
-            ):
-                current_streak = last_checkin.streak_day
-
-        # Get recent check-ins (last 7 days)
-        recent_checkins = DailyCheckIn.objects.filter(user=user)[:7]
+        # Get check-ins for the CURRENT cycle only
+        current_cycle_checkins = DailyCheckIn.objects.filter(
+            user=user, 
+            check_in_date__gte=cycle_start_date
+        )
 
         return Response(
             {
                 "checked_in_today": today_checkin is not None,
-                "current_streak": current_streak,
+                "current_streak": cycle_day if today_checkin else (cycle_day - 1), # Frontend expects 'current_streak' to mean 'days completed' mostly? Or 'current active day'? 
+                # Actually, effectively frontend uses this to show progress. 
+                # If checked in today, show cycle_day. If not, show cycle_day - 1 (completed) or just cycle_day (next target).
+                # Let's send raw cycle info for better frontend logic.
+                "cycle_day": cycle_day,
+                "cycle_start_date": cycle_start_date,
                 "today_checkin": (
                     DailyCheckInSerializer(today_checkin).data
                     if today_checkin
                     else None
                 ),
                 "recent_checkins": DailyCheckInSerializer(
-                    recent_checkins, many=True
+                    current_cycle_checkins, many=True
                 ).data,
                 "daily_rewards": self.DAILY_REWARDS,
-                "freezes_left": user.profile.streak_freezes,
             },
             status=status.HTTP_200_OK,
         )

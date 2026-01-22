@@ -52,46 +52,41 @@ class XPService:
 
 class StreakService:
     """
-    Service layer for handling Streak logic.
-
-    This service determines the validity of streaks and manages Streak Freezes.
-    It encapsulates the complex logic of:
-    1. Perfect streaks (consecutive days).
-    2. Missed days with freezes available (streak recovery).
-    3. Missed days without freezes (streak reset).
+    Service layer for handling Reward Cycle logic.
+    
+    This service determines the current day in the 7-day reward cycle.
+    Logic:
+    1. Cycle starts on the first check-in (Day 1).
+    2. It continues for 7 days regardless of check-ins.
+    3. If a day is missed, it's skipped (cannot be claimed).
+    4. After 7 days, the cycle resets to Day 1.
     """
 
     @staticmethod
-    def determine_next_streak(user, last_checkin):
-        """Calculates the new streak day for a user."""
+    def get_cycle_state(user):
+        """
+        Determines the current cycle day and handles resets.
+        Returns: (current_day_index, cycle_start_date, is_reset)
+        """
         today = timezone.now().date()
-        yesterday = today - timedelta(days=1)
+        profile = user.profile
 
-        if not last_checkin:
-            return 1, False
+        # Case 1: New user or first time using system
+        if not profile.reward_cycle_start_date:
+            profile.reward_cycle_start_date = today
+            profile.save()
+            return 1, today, True
 
-        # Consecutive check-in
-        if last_checkin.check_in_date == yesterday:
-            new_streak = last_checkin.streak_day + 1
+        days_elapsed = (today - profile.reward_cycle_start_date).days
 
-            # Reset after day 7
-            if new_streak > 7:
-                return 1, False
-            return new_streak, False
+        # Case 2: Cycle completed (7 days passed, so day index > 7)
+        # 0-indexed difference. Day 1 is diff 0. Day 7 is diff 6.
+        # If diff is 7, it's the 8th day -> Reset.
+        if days_elapsed >= 7:
+            profile.reward_cycle_start_date = today
+            profile.save()
+            return 1, today, True
 
-        # Check for Streak Freeze
-        day_before_yesterday = today - timedelta(days=2)
-
-        if last_checkin.check_in_date == day_before_yesterday:
-            if user.profile.streak_freezes > 0:
-                user.profile.streak_freezes -= 1
-                user.profile.save()
-
-                new_streak = last_checkin.streak_day + 1
-
-                if new_streak > 7:
-                    return 1, True
-
-                return new_streak, True
-
-        return 1, False
+        # Case 3: Within valid cycle
+        cycle_day = days_elapsed + 1
+        return cycle_day, profile.reward_cycle_start_date, False
