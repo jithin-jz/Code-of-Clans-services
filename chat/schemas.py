@@ -1,12 +1,11 @@
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
-import time
+from datetime import datetime
 import uuid
-
 
 class BaseEvent(BaseModel):
     type: str
-    timestamp: int = Field(default_factory=lambda: int(time.time()))
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
 class ChatMessage(BaseEvent):

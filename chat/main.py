@@ -4,7 +4,12 @@ import redis.asyncio as redis
 from dotenv import load_dotenv
 from typing import Dict, List
 
-from schemas import ChatMessage, PresenceEvent, IncomingMessage
+from schemas import ChatMessage as ChatMessageSchema, PresenceEvent, IncomingMessage
+from database import init_db, engine
+from models import ChatMessage
+from sqlmodel import select
+from sqlalchemy.orm import sessionmaker
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 load_dotenv()
 
@@ -22,6 +27,10 @@ HISTORY_LIMIT = 50
 
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 from fastapi.responses import JSONResponse
+
+@app.on_event("startup")
+async def on_startup():
+    await init_db()
 
 @app.get("/", status_code=status.HTTP_200_OK)
 async def health_check():
@@ -159,14 +168,29 @@ async def chat_ws(ws: WebSocket, room: str):
     # ---- Connect ----
     await manager.connect(ws, room)
 
-    # ---- Send history ----
-    history = await redis_client.lrange(history_key(room), 0, HISTORY_LIMIT - 1)
-    if history:
-        # History is stored reversed ? No, rpush adds to tail.
-        # So list is [oldest, ..., newest] which is correct for chat.
+    # ---- Send history from DB ----
+    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with async_session() as session:
+        statement = select(ChatMessage).where(ChatMessage.room == room).order_by(ChatMessage.timestamp.desc()).limit(HISTORY_LIMIT)
+        result = await session.exec(statement)
+        messages = result.all()
+        # Front end expects oldest first
+        history_data = [
+            {
+                "room": m.room,
+                "message": m.message,
+                "user_id": m.user_id,
+                "username": m.username,
+                "avatar_url": m.avatar_url,
+                "timestamp": m.timestamp.isoformat()
+            }
+            for m in reversed(messages)
+        ]
+
+    if history_data:
         await ws.send_text(json.dumps({
             "type": "history",
-            "messages": [json.loads(m) for m in history],
+            "messages": history_data,
         }))
 
     # ---- Presence join ----
@@ -186,7 +210,7 @@ async def chat_ws(ws: WebSocket, room: str):
 
             incoming = IncomingMessage.model_validate_json(raw)
 
-            message = ChatMessage(
+            message = ChatMessageSchema(
                 room=room,
                 message=incoming.message,
                 user_id=user_id,
@@ -194,16 +218,17 @@ async def chat_ws(ws: WebSocket, room: str):
                 avatar_url=avatar_url,
             )
 
-            # Persist
-            await redis_client.rpush(
-                history_key(room),
-                message.model_dump_json(),
+            # Persist to DB
+            db_msg = ChatMessage(
+                room=room,
+                message=message.message,
+                user_id=message.user_id,
+                username=message.username,
+                avatar_url=message.avatar_url,
             )
-            await redis_client.ltrim(
-                history_key(room),
-                -HISTORY_LIMIT,
-                -1,
-            )
+            async with async_session() as session:
+                session.add(db_msg)
+                await session.commit()
 
             # Publish
             await redis_client.publish(

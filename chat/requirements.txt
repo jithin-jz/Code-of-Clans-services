@@ -4,3 +4,5 @@ websockets==14.1
 pyjwt==2.10.1
 python-dotenv==1.0.1
 redis==5.2.1
+sqlmodel==0.0.14
+asyncpg==0.29.0

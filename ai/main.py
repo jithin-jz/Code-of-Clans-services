@@ -1,7 +1,13 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Security, status, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import time
+import os
+import jwt
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(title="CodeShorts AI Service")
 
@@ -14,6 +20,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = "HS256"
+
+security = HTTPBearer()
+
+def verify_jwt(credentials: HTTPAuthorizationCredentials = Security(security)) -> dict:
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+        )
+
 class ExplainRequest(BaseModel):
     code: str
     language: str = "python"
@@ -23,7 +45,7 @@ def read_root():
     return {"status": "AI Service Running", "service": "AI"}
 
 @app.post("/explain")
-async def explain_code(request: ExplainRequest):
+async def explain_code(request: ExplainRequest, user: dict = Depends(verify_jwt)):
     """
     Simulates AI code explanation.
     In the future, replace this with calls to OpenAI/Gemini/Anthropic.
