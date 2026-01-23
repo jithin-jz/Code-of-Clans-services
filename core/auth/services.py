@@ -20,7 +20,7 @@ from .utils import (
     get_discord_access_token,
     get_discord_user,
 )
-from .emails import send_welcome_email, send_otp_email
+from .tasks import send_welcome_email_task, send_otp_email_task
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +179,7 @@ class AuthService:
         )
 
         AuthService._create_profile(user, provider, user_info, tokens)
-        send_welcome_email(user)
+        send_welcome_email_task.delay(user.id)
 
         return user
 
@@ -249,7 +249,7 @@ class AuthService:
         otp_code = generate_otp_code()
 
         EmailOTP.objects.create(email=email, otp=otp_code)
-        send_otp_email(email, otp_code)
+        send_otp_email_task.delay(email, otp_code)
 
         return True
 
@@ -298,7 +298,7 @@ class AuthService:
                             access_token="",
                             refresh_token="",
                         )
-                    send_welcome_email(user)
+                    send_welcome_email_task.delay(user.id)
 
                 else:
                     # Login

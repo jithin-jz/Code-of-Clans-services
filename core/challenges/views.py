@@ -205,7 +205,16 @@ class LeaderboardView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Annotate users with the count of completed challenges
+        from django.core.cache import cache
+        
+        # Try to get cached leaderboard
+        cached_data = cache.get('leaderboard_data')
+        if cached_data:
+            return Response(cached_data)
+
+        # Fallback calculation (same logic as task)
+        # In production, we might want to trigger the task asynchronously here
+        # and return empty/stale data or wait, but for now we calculate synchronously on miss.
         users = User.objects.annotate(
             completed_count=Count(
                 'challenge_progress', 
@@ -219,7 +228,6 @@ class LeaderboardView(APIView):
 
         data = []
         for user in users:
-            # Handle cases where profile might be missing (though unlikely given select_related)
             try:
                 profile = user.profile
                 avatar_url = profile.avatar.url if profile.avatar else None
@@ -234,5 +242,8 @@ class LeaderboardView(APIView):
                 'completed_levels': user.completed_count,
                 'xp': xp,
             })
+            
+        # Cache fallback result
+        cache.set('leaderboard_data', data, timeout=300) 
             
         return Response(data)

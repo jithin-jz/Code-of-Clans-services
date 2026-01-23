@@ -40,6 +40,8 @@ INSTALLED_APPS = [
     "payments",
     "store", # New App
     "challenges",
+    "django_celery_beat",
+    "django_celery_results",
 ]
 
 # Middleware
@@ -218,3 +220,22 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@codeofclans.com")
 # Razorpay
 RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID")
 RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET")
+
+
+# Celery Configuration
+CELERY_BROKER_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+CELERY_RESULT_BACKEND = "django-db"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+
+# Celery Beat
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+CELERY_BEAT_SCHEDULE = {
+    'update-leaderboard-every-5-minutes': {
+        'task': 'challenges.tasks.update_leaderboard_cache',
+        'schedule': 300.0, # 5 minutes
+    },
+}
