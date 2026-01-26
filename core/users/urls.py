@@ -7,8 +7,7 @@ from .views import (
     FollowToggleView,
     UserFollowersView,
     UserFollowingView,
-    UserListView,
-    UserBlockToggleView,
+    UserFollowingView,
 )
 
 urlpatterns = [
@@ -28,12 +27,5 @@ urlpatterns = [
         "users/<str:username>/following/",
         UserFollowingView.as_view(),
         name="user_following",
-    ),
-    # Admin routes (moved from auth)
-    path("admin/users/", UserListView.as_view(), name="admin_user_list"),
-    path(
-        "admin/users/<str:username>/toggle-block/",
-        UserBlockToggleView.as_view(),
-        name="admin_toggle_block_user",
     ),
 ]
