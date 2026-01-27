@@ -159,6 +159,10 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5176",
 ]
 CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost",
+    "http://127.0.0.1",
+]
 
 # drf_spectacular
 

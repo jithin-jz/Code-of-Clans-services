@@ -1,14 +1,16 @@
 from rest_framework import viewsets, status, decorators
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Count, Q
 from rest_framework.views import APIView
+import logging
 
-from .models import Challenge, Hint, UserProgress
-from .serializers import ChallengeSerializer, HintSerializer, UserProgressSerializer
+from .models import Challenge, Hint, UserProgress, UserCertificate
+from .serializers import ChallengeSerializer, HintSerializer, UserProgressSerializer, UserCertificateSerializer
 from .services import ChallengeService
+from .utils import generate_certificate_image
 from users.models import UserProfile
 from django.contrib.auth.models import User
 
@@ -98,6 +100,68 @@ class ChallengeViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Hint not found'}, status=status.HTTP_404_NOT_FOUND)
         except PermissionError:
             return Response({'error': 'Insufficient XP'}, status=status.HTTP_402_PAYMENT_REQUIRED)
+
+
+class CertificateViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        certs = UserCertificate.objects.filter(user=request.user)
+        serializer = UserCertificateSerializer(certs, many=True)
+        return Response(serializer.data)
+
+    @decorators.action(detail=False, methods=['post'])
+    def claim(self, request):
+        """
+        Claim certificate if all levels are completed.
+        """
+        user = request.user
+        
+        # Check if already has certificate
+        if UserCertificate.objects.filter(user=user).exists():
+            return Response({'error': 'Certificate already claimed'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check completion
+        total_challenges = Challenge.objects.count()
+        completed_challenges = UserProgress.objects.filter(
+            user=user, 
+            status=UserProgress.Status.COMPLETED
+        ).count()
+
+        if completed_challenges < total_challenges and total_challenges > 0:
+             return Response({
+                 'error': 'Course not completed', 
+                 'completed': completed_challenges, 
+                 'total': total_challenges
+             }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Generate Certificate
+        cert = UserCertificate(user=user)
+        image_file = generate_certificate_image(cert)
+        cert.certificate_image.save(image_file.name, image_file)
+        cert.save()
+
+        serializer = UserCertificateSerializer(cert)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class VerifyCertificateView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, certificate_id):
+        try:
+            cert = UserCertificate.objects.get(id=certificate_id)
+            serializer = UserCertificateSerializer(cert)
+            return Response({
+                'valid': True,
+                'certificate': serializer.data,
+                'user': cert.user.username,
+                'issued_at': cert.issued_at
+            })
+        except UserCertificate.DoesNotExist:
+             return Response({'valid': False, 'error': 'Invalid Certificate ID'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'valid': False, 'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class LeaderboardView(APIView):

@@ -26,3 +26,5 @@ celery==5.4.0
 redis==5.0.1
 django-celery-beat==2.6.0
 django-celery-results==2.5.1
+qrcode==7.4.2
+Pillow==10.0.0
