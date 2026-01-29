@@ -22,7 +22,8 @@ from xpoint.services import XPService
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 
-@method_decorator(never_cache, name='dispatch')
+
+@method_decorator(never_cache, name="dispatch")
 class CurrentUserView(APIView):
     """Get the currently authenticated user."""
 

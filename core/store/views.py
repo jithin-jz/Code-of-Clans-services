@@ -19,7 +19,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 
 
-@method_decorator(never_cache, name='dispatch')
+@method_decorator(never_cache, name="dispatch")
 class StoreItemViewSet(viewsets.ModelViewSet):
     queryset = StoreItem.objects.filter(is_active=True)
     serializer_class = StoreItemSerializer
