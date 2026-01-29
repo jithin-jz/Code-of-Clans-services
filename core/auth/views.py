@@ -43,7 +43,7 @@ class GitHubAuthURLView(APIView):
         }
         if state:
             params["state"] = state
-            
+
         url = f"https://github.com/login/oauth/authorize?{urlencode(params)}"
         return Response({"url": url}, status=status.HTTP_200_OK)
 
@@ -218,7 +218,8 @@ class RefreshTokenView(APIView):
             user = User.objects.get(id=payload["user_id"])
         except User.DoesNotExist:
             return Response(
-                {"error": "Invalid or expired refresh token"}, status=status.HTTP_401_UNAUTHORIZED
+                {"error": "Invalid or expired refresh token"},
+                status=status.HTTP_401_UNAUTHORIZED,
             )
 
         if not user.is_active:
@@ -250,7 +251,9 @@ class LogoutView(APIView):
     def post(self, request):
         # In a stateless JWT system, logout is handled client-side
         # We just return success here
-        return Response({"message": "Successfully logged out"}, status=status.HTTP_200_OK)
+        return Response(
+            {"message": "Successfully logged out"}, status=status.HTTP_200_OK
+        )
 
 
 class DeleteAccountView(APIView):
@@ -266,7 +269,9 @@ class DeleteAccountView(APIView):
     def delete(self, request):
         user = request.user
         user.delete()
-        return Response({"message": "Account deleted successfully"}, status=status.HTTP_200_OK)
+        return Response(
+            {"message": "Account deleted successfully"}, status=status.HTTP_200_OK
+        )
 
 
 # --- Admin Views ---
@@ -310,7 +315,7 @@ class OTPRequestView(APIView):
 
     permission_classes = [AllowAny]
     throttle_classes = [AnonRateThrottle]
-    throttle_scope = 'otp'
+    throttle_scope = "otp"
     serializer_class = OTPRequestSerializer
 
     def post(self, request):

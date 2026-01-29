@@ -6,13 +6,25 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('store', '0003_storeitem_image'),
+        ("store", "0003_storeitem_image"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='storeitem',
-            name='category',
-            field=models.CharField(choices=[('ITEM', 'Item'), ('THEME', 'Theme'), ('BADGE', 'Badge'), ('BOOSTER', 'Booster'), ('FONT', 'Font'), ('EFFECT', 'Cursor Effect'), ('VICTORY', 'Victory Animation')], default='ITEM', max_length=20),
+            model_name="storeitem",
+            name="category",
+            field=models.CharField(
+                choices=[
+                    ("ITEM", "Item"),
+                    ("THEME", "Theme"),
+                    ("BADGE", "Badge"),
+                    ("BOOSTER", "Booster"),
+                    ("FONT", "Font"),
+                    ("EFFECT", "Cursor Effect"),
+                    ("VICTORY", "Victory Animation"),
+                ],
+                default="ITEM",
+                max_length=20,
+            ),
         ),
     ]

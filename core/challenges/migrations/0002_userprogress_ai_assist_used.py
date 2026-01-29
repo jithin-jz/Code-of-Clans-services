@@ -6,13 +6,15 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('challenges', '0001_initial'),
+        ("challenges", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='userprogress',
-            name='ai_assist_used',
-            field=models.BooleanField(default=False, help_text='True if user purchased AI help.'),
+            model_name="userprogress",
+            name="ai_assist_used",
+            field=models.BooleanField(
+                default=False, help_text="True if user purchased AI help."
+            ),
         ),
     ]

@@ -38,7 +38,7 @@ INSTALLED_APPS = [
     "users",
     "xpoint",
     "payments",
-    "store", # New App
+    "store",  # New App
     "challenges",
     "django_celery_beat",
     "django_celery_results",
@@ -189,7 +189,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "20/minute",  # General anonymous limit
         "user": "100/minute",  # General user limit
-        "otp": "5/minute",     # Strict limit for OTP requests
+        "otp": "5/minute",  # Strict limit for OTP requests
     },
 }
 
@@ -236,11 +236,11 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 
 # Celery Beat
-CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
 CELERY_BEAT_SCHEDULE = {
-    'update-leaderboard-every-5-minutes': {
-        'task': 'challenges.tasks.update_leaderboard_cache',
-        'schedule': 300.0, # 5 minutes
+    "update-leaderboard-every-5-minutes": {
+        "task": "challenges.tasks.update_leaderboard_cache",
+        "schedule": 300.0,  # 5 minutes
     },
 }

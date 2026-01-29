@@ -83,11 +83,12 @@ class ProfileUpdateView(APIView):
 
         # Generate new tokens to reflect updated claims (username/avatar)
         from auth.utils import generate_tokens
+
         tokens = generate_tokens(user)
 
         data = UserSerializer(user, context={"request": request}).data
-        data['access_token'] = tokens['access_token']
-        data['refresh_token'] = tokens['refresh_token']
+        data["access_token"] = tokens["access_token"]
+        data["refresh_token"] = tokens["refresh_token"]
 
         return Response(
             data,
@@ -320,6 +321,3 @@ class RedeemReferralView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-
-
-

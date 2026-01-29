@@ -8,6 +8,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 @shared_task
 def update_leaderboard_cache():
     """
@@ -16,19 +17,20 @@ def update_leaderboard_cache():
     """
     User = get_user_model()
     logger.info("Starting leaderboard calculation task...")
-    
+
     try:
         # Aggregation Logic (Copied from LeaderboardView)
-        users = User.objects.annotate(
-            completed_count=Count(
-                'challenge_progress', 
-                filter=Q(challenge_progress__status='COMPLETED')
+        users = (
+            User.objects.annotate(
+                completed_count=Count(
+                    "challenge_progress",
+                    filter=Q(challenge_progress__status="COMPLETED"),
+                )
             )
-        ).select_related('profile').filter(
-            is_active=True, 
-            is_staff=False, 
-            is_superuser=False
-        ).order_by('-completed_count', '-profile__xp')[:100]
+            .select_related("profile")
+            .filter(is_active=True, is_staff=False, is_superuser=False)
+            .order_by("-completed_count", "-profile__xp")[:100]
+        )
 
         data = []
         for user in users:
@@ -40,16 +42,18 @@ def update_leaderboard_cache():
                 avatar_url = None
                 xp = 0
 
-            data.append({
-                'username': user.username,
-                'avatar': avatar_url,
-                'completed_levels': user.completed_count,
-                'xp': xp,
-            })
-        
+            data.append(
+                {
+                    "username": user.username,
+                    "avatar": avatar_url,
+                    "completed_levels": user.completed_count,
+                    "xp": xp,
+                }
+            )
+
         # Cache the result for 15 minutes (or however long until next run)
-        cache.set('leaderboard_data', data, timeout=None) 
+        cache.set("leaderboard_data", data, timeout=None)
         logger.info("Leaderboard updated successfully.")
-        
+
     except Exception as e:
         logger.exception(f"Leaderboard task failed: {str(e)}")

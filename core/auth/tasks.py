@@ -4,6 +4,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 @shared_task
 def send_welcome_email_task(user_id):
     """
@@ -11,6 +12,7 @@ def send_welcome_email_task(user_id):
     We pass user_id because passing complex objects (User) to Celery is an anti-pattern.
     """
     from django.contrib.auth import get_user_model
+
     User = get_user_model()
     try:
         user = User.objects.get(pk=user_id)
@@ -20,6 +22,7 @@ def send_welcome_email_task(user_id):
         logger.warning(f"User {user_id} not found for welcome email task")
     except Exception as e:
         logger.exception(f"Welcome email task failed: {str(e)}")
+
 
 @shared_task
 def send_otp_email_task(email, otp):

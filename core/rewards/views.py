@@ -74,7 +74,7 @@ class CheckInView(APIView):
         """Get user's check-in status and history."""
         user = request.user
         today = timezone.now().date()
-        
+
         from xpoint.services import StreakService
 
         # Get current cycle state (this handles resetting if needed)
@@ -87,15 +87,16 @@ class CheckInView(APIView):
 
         # Get check-ins for the CURRENT cycle only
         current_cycle_checkins = DailyCheckIn.objects.filter(
-            user=user, 
-            check_in_date__gte=cycle_start_date
+            user=user, check_in_date__gte=cycle_start_date
         )
 
         return Response(
             {
                 "checked_in_today": today_checkin is not None,
-                "current_streak": cycle_day if today_checkin else (cycle_day - 1), # Frontend expects 'current_streak' to mean 'days completed' mostly? Or 'current active day'? 
-                # Actually, effectively frontend uses this to show progress. 
+                "current_streak": (
+                    cycle_day if today_checkin else (cycle_day - 1)
+                ),  # Frontend expects 'current_streak' to mean 'days completed' mostly? Or 'current active day'?
+                # Actually, effectively frontend uses this to show progress.
                 # If checked in today, show cycle_day. If not, show cycle_day - 1 (completed) or just cycle_day (next target).
                 # Let's send raw cycle info for better frontend logic.
                 "cycle_day": cycle_day,

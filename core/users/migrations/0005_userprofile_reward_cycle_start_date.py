@@ -6,13 +6,17 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('users', '0004_alter_userprofile_provider'),
+        ("users", "0004_alter_userprofile_provider"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='userprofile',
-            name='reward_cycle_start_date',
-            field=models.DateField(blank=True, help_text='Start date of the current 7-day reward cycle.', null=True),
+            model_name="userprofile",
+            name="reward_cycle_start_date",
+            field=models.DateField(
+                blank=True,
+                help_text="Start date of the current 7-day reward cycle.",
+                null=True,
+            ),
         ),
     ]

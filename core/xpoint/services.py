@@ -18,9 +18,7 @@ class XPService:
     def add_xp(user, amount, source=None, description=None):
         """Add XP to a user's profile."""
         if amount == 0:
-            logger.warning(
-                f"Attempted to add zero XP to user {user.username}"
-            )
+            logger.warning(f"Attempted to add zero XP to user {user.username}")
             return user.profile.xp
 
         try:
@@ -53,7 +51,7 @@ class XPService:
 class StreakService:
     """
     Service layer for handling Reward Cycle logic.
-    
+
     This service determines the current day in the 7-day reward cycle.
     Logic:
     1. Cycle starts on the first check-in (Day 1).

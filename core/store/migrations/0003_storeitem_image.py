@@ -6,13 +6,18 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('store', '0002_storeitem_category_storeitem_item_data'),
+        ("store", "0002_storeitem_category_storeitem_item_data"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='storeitem',
-            name='image',
-            field=models.CharField(blank=True, help_text='Path to image in public folder (e.g. /store/dracula.png)', max_length=255, null=True),
+            model_name="storeitem",
+            name="image",
+            field=models.CharField(
+                blank=True,
+                help_text="Path to image in public folder (e.g. /store/dracula.png)",
+                max_length=255,
+                null=True,
+            ),
         ),
     ]

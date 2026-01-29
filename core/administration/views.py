@@ -11,9 +11,10 @@ from django.db.models import Sum
 from users.models import UserProfile
 from users.serializers import UserSerializer
 
+
 class AdminStatsView(APIView):
     """View to get admin dashboard statistics."""
-    
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -21,23 +22,28 @@ class AdminStatsView(APIView):
             return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
 
         total_users = User.objects.count()
-        
+
         # Active sessions in last 24 hours
         yesterday = timezone.now() - timedelta(days=1)
         active_sessions = User.objects.filter(last_login__gte=yesterday).count()
-        
-        # OAuth logins (Providers other than email/local)
-        oauth_logins = UserProfile.objects.exclude(provider__in=['email', 'local']).count()
-        
-        # Total Gems (XP)
-        total_xp = UserProfile.objects.aggregate(total_xp=Sum('xp'))['total_xp'] or 0
 
-        return Response({
-            "total_users": total_users,
-            "active_sessions": active_sessions,
-            "oauth_logins": oauth_logins,
-            "total_gems": total_xp
-        }, status=status.HTTP_200_OK)
+        # OAuth logins (Providers other than email/local)
+        oauth_logins = UserProfile.objects.exclude(
+            provider__in=["email", "local"]
+        ).count()
+
+        # Total Gems (XP)
+        total_xp = UserProfile.objects.aggregate(total_xp=Sum("xp"))["total_xp"] or 0
+
+        return Response(
+            {
+                "total_users": total_users,
+                "active_sessions": active_sessions,
+                "oauth_logins": oauth_logins,
+                "total_gems": total_xp,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class UserListView(APIView):

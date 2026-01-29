@@ -6,18 +6,31 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('store', '0001_initial'),
+        ("store", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='storeitem',
-            name='category',
-            field=models.CharField(choices=[('ITEM', 'Item'), ('THEME', 'Theme'), ('BADGE', 'Badge'), ('BOOSTER', 'Booster')], default='ITEM', max_length=20),
+            model_name="storeitem",
+            name="category",
+            field=models.CharField(
+                choices=[
+                    ("ITEM", "Item"),
+                    ("THEME", "Theme"),
+                    ("BADGE", "Badge"),
+                    ("BOOSTER", "Booster"),
+                ],
+                default="ITEM",
+                max_length=20,
+            ),
         ),
         migrations.AddField(
-            model_name='storeitem',
-            name='item_data',
-            field=models.JSONField(blank=True, default=dict, help_text='JSON data for functional items (e.g., theme_key)'),
+            model_name="storeitem",
+            name="item_data",
+            field=models.JSONField(
+                blank=True,
+                default=dict,
+                help_text="JSON data for functional items (e.g., theme_key)",
+            ),
         ),
     ]
