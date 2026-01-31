@@ -22,7 +22,7 @@ class Command(BaseCommand):
                 "Hello World",
                 "Print 'Hello, World!' to the console.",
                 "def solution():\n    # Write your code here\n    pass",
-                "import sys\nfrom io import StringIO\ndef check(sol):\n    out = StringIO()\n    sys.stdout = out\n    sol()\n    sys.stdout = sys.__stdout__\n    assert out.getvalue().strip() == 'Hello, World!'",
+                "import sys\nfrom io import StringIO\ndef check(scope):\n    out = StringIO()\n    sys.stdout = out\n    scope['solution']()\n    sys.stdout = sys.__stdout__\n    assert out.getvalue().strip() == 'Hello, World!'",
                 10,
             ),
             (
