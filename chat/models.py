@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Column, DateTime, JSON
 from datetime import datetime
 from typing import Optional
 from zoneinfo import ZoneInfo
@@ -18,3 +18,4 @@ class ChatMessage(SQLModel, table=True):
         default_factory=get_ist_time,
         sa_column=Column(DateTime(timezone=True))
     )
+    reactions: Optional[dict] = Field(default=None, sa_column=Column(JSON))  # {emoji: [usernames]}

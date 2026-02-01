@@ -13,7 +13,11 @@ from database import init_db, engine
 from models import ChatMessage
 from rate_limiter import RateLimiter
 
-# Configure logging
+# Configure structured logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 load_dotenv()
@@ -35,6 +39,7 @@ rate_limiter = RateLimiter(redis_client)
 
 # Chat config
 HISTORY_LIMIT = 50
+TYPING_INDICATOR_TTL = 3  # seconds
 
 @app.on_event("startup")
 async def on_startup():
@@ -42,7 +47,59 @@ async def on_startup():
 
 @app.get("/", status_code=status.HTTP_200_OK)
 async def health_check():
-    return JSONResponse(content={"status": "ok"}, status_code=status.HTTP_200_OK)
+    return JSONResponse(content={"status": "ok", "service": "chat"}, status_code=status.HTTP_200_OK)
+
+@app.get("/history/{room}")
+async def get_message_history(room: str, limit: int = 50, offset: int = 0, token: str = ""):
+    """Get paginated message history for a room."""
+    # Verify token
+    payload = verify_jwt(token)
+    if not payload:
+        return JSONResponse(
+            content={"error": "Invalid token"},
+            status_code=status.HTTP_401_UNAUTHORIZED
+        )
+    
+    try:
+        async_session = sessionmaker(
+            engine, class_=AsyncSession, expire_on_commit=False
+        )
+        async with async_session() as session:
+            # Get messages with pagination
+            statement = (
+                select(ChatMessage)
+                .where(ChatMessage.room == room)
+                .order_by(ChatMessage.timestamp.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            result = await session.execute(statement)
+            messages = result.scalars().all()
+            
+            # Reverse to get chronological order
+            messages = list(reversed(messages))
+            
+            return JSONResponse(
+                content={
+                    "messages": [
+                        {
+                            "username": msg.username,
+                            "message": msg.message,
+                            "timestamp": msg.timestamp.isoformat(),
+                            "reactions": msg.reactions or {}
+                        }
+                        for msg in messages
+                    ],
+                    "has_more": len(messages) == limit
+                },
+                status_code=status.HTTP_200_OK
+            )
+    except Exception as e:
+        logger.error(f"Error fetching message history: {e}", exc_info=True)
+        return JSONResponse(
+            content={"error": "Failed to fetch message history"},
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 # --------------------------------------------------
 # Helpers
@@ -117,7 +174,14 @@ class ConnectionManager:
         for ws in self.active.get(room, []):
             try:
                 await ws.send_text(message)
-            except Exception:
+            except ConnectionResetError:
+                logger.warning(f"Connection reset while broadcasting to room {room}")
+                dead.append(ws)
+            except RuntimeError as e:
+                logger.error(f"Runtime error broadcasting to room {room}: {e}")
+                dead.append(ws)
+            except Exception as e:
+                logger.error(f"Unexpected error broadcasting to room {room}: {e}", exc_info=True)
                 dead.append(ws)
 
         for ws in dead:
@@ -169,8 +233,8 @@ async def chat_ws(ws: WebSocket, room: str):
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with async_session() as session:
         statement = select(ChatMessage).where(ChatMessage.room == room).order_by(ChatMessage.timestamp.desc()).limit(HISTORY_LIMIT)
-        result = await session.exec(statement)
-        messages = result.all()
+        result = await session.execute(statement)
+        messages = result.scalars().all()
         # Front end expects oldest first
         history_data = [
             {
@@ -179,7 +243,8 @@ async def chat_ws(ws: WebSocket, room: str):
                 "user_id": m.user_id,
                 "username": m.username,
                 "avatar_url": m.avatar_url,
-                "timestamp": m.timestamp.isoformat()
+                "timestamp": m.timestamp.isoformat(),
+                "reactions": m.reactions or {}
             }
             for m in reversed(messages)
         ]

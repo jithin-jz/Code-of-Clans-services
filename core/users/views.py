@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -86,6 +87,9 @@ class ProfileUpdateView(APIView):
 
         profile.save()
 
+        # Invalidate profile cache
+        cache.delete(f'profile:{user.username}')
+
         # Generate new tokens to reflect updated claims (username/avatar)
         from auth.utils import generate_tokens
 
@@ -108,6 +112,13 @@ class ProfileDetailView(APIView):
     serializer_class = UserSerializer
 
     def get(self, request, username):
+        # Try to get from cache first
+        cache_key = f'profile:{username}'
+        cached_data = cache.get(cache_key)
+        
+        if cached_data:
+            return Response(cached_data, status=status.HTTP_200_OK)
+        
         try:
             user = User.objects.get(username=username)
         except User.DoesNotExist:
@@ -127,6 +138,9 @@ class ProfileDetailView(APIView):
         else:
             data["is_following"] = False
 
+        # Cache for 5 minutes
+        cache.set(cache_key, data, 300)
+        
         return Response(data, status=status.HTTP_200_OK)
 
 

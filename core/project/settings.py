@@ -142,6 +142,19 @@ MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 # Backend URL (for absolute media paths)
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
+# Cache Configuration
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': os.getenv("REDIS_URL", "redis://redis:6379/0"),
+        'OPTIONS': {
+            'db': 1,  # Use different Redis DB than Celery
+        },
+        'KEY_PREFIX': 'coc',
+        'TIMEOUT': 300,  # Default timeout: 5 minutes
+    }
+}
+
 # Default primary key
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
