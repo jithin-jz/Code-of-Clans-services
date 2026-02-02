@@ -7,5 +7,5 @@ python-dotenv
 chromadb
 sentence-transformers
 langchain-chroma
+langchain-huggingface
 pysqlite3-binary
-

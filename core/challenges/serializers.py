@@ -23,7 +23,10 @@ class ChallengeSerializer(serializers.ModelSerializer):
             "order",
             "xp_reward",
             "time_limit",
+            "created_for_user_id",
         ]
+    
+    created_for_user_id = serializers.IntegerField(write_only=True, required=False)
 
 
 class UserProgressSerializer(serializers.ModelSerializer):

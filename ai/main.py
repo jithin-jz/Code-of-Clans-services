@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -51,6 +51,50 @@ class HintRequest(BaseModel):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+from big_bang import run_big_bang
+
+@app.post("/big-bang")
+async def trigger_big_bang(background_tasks: BackgroundTasks, levels: int = 5):
+    """
+    Triggers the autonomous curriculum generation in the background.
+    """
+    background_tasks.add_task(run_big_bang, levels)
+    return {"message": f"Big Bang started for {levels} levels. Check AI logs for progress."}
+
+@app.post("/generate-level")
+async def generate_single_level(background_tasks: BackgroundTasks, level: int, user_id: int = None):
+    """
+    Generates a specific single level in the background.
+    """
+    def _run_single(lvl, uid):
+        from auto_generator import AutoGenerator
+        import requests
+        
+        logger.info(f"Generating Single Level {lvl} for User {uid}...")
+        try:
+            generator = AutoGenerator()
+            challenge_json = generator.generate_level(lvl, user_id=uid)
+            
+            headers = {
+                "X-Internal-API-Key": INTERNAL_API_KEY,
+                "Content-Type": "application/json"
+            }
+            url = f"{CORE_SERVICE_URL}/api/challenges/"
+            challenge_json["order"] = lvl
+            if uid:
+                challenge_json["created_for_user_id"] = uid
+            
+            response = requests.post(url, json=challenge_json, headers=headers)
+            if response.status_code in [200, 201]:
+                logger.info(f"Level {lvl} generated and saved successfully for user {uid}.")
+            else:
+                logger.error(f"Failed to save Level {lvl}: {response.text}")
+        except Exception as e:
+            logger.error(f"Error generating single level {lvl}: {e}")
+
+    background_tasks.add_task(_run_single, level, user_id)
+    return {"message": f"Generation started for level {level}"}
 
 import logging
 

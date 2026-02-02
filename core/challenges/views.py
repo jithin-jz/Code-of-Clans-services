@@ -29,14 +29,48 @@ class ChallengeViewSet(viewsets.ModelViewSet):
     serializer_class = ChallengeSerializer
     lookup_field = "slug"
 
+    def get_queryset(self):
+        """
+        Return global challenges + challenges created specifically for this user.
+        """
+        user = self.request.user
+        if not user.is_authenticated:
+            # Public view: only global challenges
+            return Challenge.objects.filter(created_for_user__isnull=True)
+        
+        # Admin sees all? Or just standard + own? Let's say standard + own for now to keep things clean
+        if user.is_staff:
+            return Challenge.objects.all()
+
+        return Challenge.objects.filter(
+            Q(created_for_user__isnull=True) | Q(created_for_user=user)
+        )
+
     def get_permissions(self):
-        if self.action in ["internal_context", "internal_list"]:
+        if self.action in ["internal_context", "internal_list", "create"]:
+            # If creating, we still check the internal key in perform_create/dispatch or here
+            # For simplicity, we'll allow AllowAny here and check key in the action
             permission_classes = [AllowAny]
-        elif self.action in ["create", "update", "partial_update", "destroy"]:
+        elif self.action in ["update", "partial_update", "destroy"]:
             permission_classes = [IsAdminUser]
         else:
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
+
+    def create(self, request, *args, **kwargs):
+        # Professional Internal Bypass for Automation
+        import os
+        internal_key = os.getenv("INTERNAL_API_KEY")
+        request_key = request.headers.get("X-Internal-API-Key")
+
+        if internal_key and request_key == internal_key:
+            return super().create(request, *args, **kwargs)
+        
+        # Fallback to Admin only for manual creation
+        if not request.user.is_staff:
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+            
+        return super().create(request, *args, **kwargs)
 
     @extend_schema(
         request=None,
@@ -122,6 +156,44 @@ class ChallengeViewSet(viewsets.ModelViewSet):
             # Return 200 but indicating failure in body, OR 422 Unprocessable Entity
             # user requested 200 with status=failed is easier for frontend usually.
             return Response(result, status=status.HTTP_200_OK)
+
+        # --- ENDLESS MODE TRIGGER ---
+        # If passed, check if we need to generate the NEXT level.
+        if passed and result["status"] in ["completed", "already_completed"]:
+            try:
+                current_order = challenge.order
+                user = request.user
+                user_id = user.id # Capture explicitly for thread safety
+                
+                # Check if next level exists FOR THIS USER
+                # We check global (created_for_user__isnull=True) AND user-specific
+                next_level_exists = Challenge.objects.filter(
+                    Q(created_for_user__isnull=True) | Q(created_for_user=user),
+                    order=current_order + 1
+                ).exists()
+
+                if not next_level_exists:
+                    logger.info(f"Endless Mode: Triggering generation for Level {current_order + 1} for User {user.username}")
+                    
+                    # Fire and forget request to AI service
+                    import threading
+                    import requests
+                    import os
+                    
+                    def trigger_ai():
+                        ai_url = os.getenv("AI_SERVICE_URL", "http://ai:8002")
+                        # Pass user_id so AI creates personalized content
+                        url = f"{ai_url}/generate-level?level={current_order + 1}&user_id={user_id}"
+                        try:
+                            # Use internal key just in case, though usually optional for generate-level if not protected
+                            # But saving BACK to core requires it.
+                            requests.post(url, timeout=1) 
+                        except requests.exceptions.RequestException:
+                            pass # Expected, as we don't wait for response
+                            
+                    threading.Thread(target=trigger_ai).start()
+            except Exception as e:
+                logger.error(f"Endless Mode Error: {e}")
 
         return Response(result, status=status.HTTP_200_OK)
 

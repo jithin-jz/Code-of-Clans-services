@@ -15,6 +15,12 @@ class Challenge(models.Model):
         help_text="Hidden python code to assert the user solution"
     )
     order = models.IntegerField(default=0, help_text="Order in the campaign level map")
+    
+    # New Field: created_for_user
+    # If null, it is a global level (e.g. Level 1)
+    # If set, it is a personalized level for that user only
+    created_for_user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="personalized_challenges")
+
     xp_reward = models.IntegerField(default=50)
     time_limit = models.IntegerField(
         default=300, help_text="Suggested time in seconds for bonus"
@@ -27,7 +33,8 @@ class Challenge(models.Model):
         ordering = ["order"]
 
     def __str__(self):
-        return f"{self.order}. {self.title}"
+        user_str = f" [User: {self.created_for_user.username}]" if self.created_for_user else " [Global]"
+        return f"{self.order}. {self.title}{user_str}"
 
 
 class Hint(models.Model):
