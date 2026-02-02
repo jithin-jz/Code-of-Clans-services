@@ -4,4 +4,8 @@ langchain
 langchain-openai
 requests
 python-dotenv
+chromadb
+sentence-transformers
+langchain-chroma
+pysqlite3-binary
 

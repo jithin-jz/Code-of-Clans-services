@@ -30,13 +30,31 @@ class ChallengeViewSet(viewsets.ModelViewSet):
     lookup_field = "slug"
 
     def get_permissions(self):
-        if self.action == "internal_context":
+        if self.action in ["internal_context", "internal_list"]:
             permission_classes = [AllowAny]
         elif self.action in ["create", "update", "partial_update", "destroy"]:
             permission_classes = [IsAdminUser]
         else:
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
+
+    @extend_schema(
+        request=None,
+        responses={200: ChallengeSerializer(many=True)},
+        description="Internal endpoint to list all challenges for indexing.",
+    )
+    @decorators.action(detail=False, methods=["get"], url_path="internal-list")
+    def internal_list(self, request):
+        import os
+        internal_key = os.getenv("INTERNAL_API_KEY")
+        request_key = request.headers.get("X-Internal-API-Key")
+
+        if not internal_key or request_key != internal_key:
+             return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        challenges = Challenge.objects.all()
+        serializer = ChallengeSerializer(challenges, many=True)
+        return Response(serializer.data)
 
     def list(self, request, *args, **kwargs):
         """
