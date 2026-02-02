@@ -7,6 +7,8 @@ from django.db.models import Count, Q
 from rest_framework.views import APIView
 import logging
 
+logger = logging.getLogger(__name__)
+
 from drf_spectacular.utils import extend_schema, OpenApiTypes, inline_serializer
 
 from .models import Challenge, Hint, UserProgress, UserCertificate
@@ -28,7 +30,9 @@ class ChallengeViewSet(viewsets.ModelViewSet):
     lookup_field = "slug"
 
     def get_permissions(self):
-        if self.action in ["create", "update", "partial_update", "destroy"]:
+        if self.action == "internal_context":
+            permission_classes = [AllowAny]
+        elif self.action in ["create", "update", "partial_update", "destroy"]:
             permission_classes = [IsAdminUser]
         else:
             permission_classes = [IsAuthenticated]
@@ -160,6 +164,57 @@ class ChallengeViewSet(viewsets.ModelViewSet):
         except PermissionError:
             return Response(
                 {"error": "Insufficient XP"}, status=status.HTTP_402_PAYMENT_REQUIRED
+            )
+
+    @extend_schema(
+        request=None,
+        responses={
+            200: inline_serializer(
+                name="ChallengeContextResponse",
+                fields={
+                    "description": serializers.CharField(),
+                    "initial_code": serializers.CharField(),
+                    "test_code": serializers.CharField(),
+                }
+            ),
+            403: OpenApiTypes.OBJECT,
+        },
+        description="Internal endpoint to fetch challenge context for AI service.",
+    )
+    @decorators.action(detail=True, methods=["get"], url_path="context")
+    def internal_context(self, request, slug=None):
+        import os
+        internal_key = os.getenv("INTERNAL_API_KEY")
+        request_key = request.headers.get("X-Internal-API-Key")
+
+        logger.info(f"Internal context request for slug: {slug}")
+
+        if not internal_key or request_key != internal_key:
+             logger.warning(f"Unauthorized internal context request for slug: {slug}")
+             return Response(
+                {"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN
+            )
+
+        try:
+            # Using direct lookup to avoid potential issues with self.get_object() 
+            # when called from internal services or with specific queryset filtering.
+            challenge = Challenge.objects.get(slug=slug)
+            logger.info(f"Successfully fetched context for slug: {slug}")
+            return Response({
+                "description": challenge.description,
+                "initial_code": challenge.initial_code,
+                "test_code": challenge.test_code,
+            })
+        except Challenge.DoesNotExist:
+            logger.error(f"Challenge not found for internal context: {slug}")
+            return Response(
+                {"error": "Challenge not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Error in internal_context for slug {slug}: {str(e)}")
+            return Response(
+                {"error": "Internal error fetching context"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
