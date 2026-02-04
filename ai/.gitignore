@@ -63,3 +63,4 @@ Thumbs.db
 build/
 dist/
 *.egg-info/
+chroma_db/chroma.sqlite3
