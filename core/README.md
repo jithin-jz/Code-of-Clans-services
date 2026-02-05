@@ -15,34 +15,20 @@ The robust API and real-time socket server for **Clash of Code**. Handles authen
 
 ## 🚀 Key Features
 
-*   **RESTful API** - Comprehensive endpoints for user profiles, XP tracking, and tasks.
-*   **WebSocket Server** - Real-time bidirectional communication for global chat.
-*   **OAuth System** - Integrated social login for GitHub, Google, and Discord.
-*   **Background Tasks** - Efficient handling of asynchronous operations.
+- **RESTful API** - Comprehensive endpoints for user profiles, XP tracking, and tasks.
+- **WebSocket Server** - Real-time bidirectional communication for global chat.
+- **OAuth System** - Integrated social login for GitHub, Google, and Discord.
+- **Background Tasks** - Efficient handling of asynchronous operations.
 
 ## 🛠️ Installation & Setup
 
-1.  **Create virtual environment**:
+1. **Run with Docker**:
+    The backend services are fully containerized. You do not need to manage local virtual environments.
+
     ```bash
-    python -m venv .venv
-    # Windows: .venv\Scripts\activate
-    # Mac/Linux: source .venv/bin/activate
+    docker-compose up --build
     ```
 
-2.  **Install dependencies**:
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-3.  **Apply migrations**:
-    ```bash
-    python manage.py migrate
-    ```
-
-4.  **Run the server**:
-    ```bash
-    python manage.py runserver
-    ```
     API: `http://127.0.0.1:8000` | WebSockets: `ws://127.0.0.1:8000/ws/`
 
 ## 🔐 Environment Variables

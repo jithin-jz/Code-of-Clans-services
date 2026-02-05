@@ -28,6 +28,13 @@ class ChallengeSchema(BaseModel):
 
 def extract_json_from_response(raw_response: str) -> str:
     cleaned_response = raw_response.strip()
+    # Remove markdown code block markers if present
+    if "```json" in cleaned_response:
+        cleaned_response = cleaned_response.split("```json")[1].split("```")[0].strip()
+    elif "```" in cleaned_response:
+        cleaned_response = cleaned_response.split("```")[1].split("```")[0].strip()
+    
+    # Fallback regex if still needed (e.g. text before/after JSON)
     match = re.search(r"\{.*\}", cleaned_response, re.DOTALL)
     if match:
         cleaned_response = match.group(0)

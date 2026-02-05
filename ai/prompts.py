@@ -7,21 +7,25 @@ CRITICAL REQUIREMENTS:
 1. FOCUS: {topic}
 2. CONCEPTS: {concepts}
 3. DIFFICULTY: {difficulty}
-4. FORMAT: You MUST output ONLY valid JSON. No conversational text.
-5. SCHEMA:
+4. FORMAT: You MUST output ONLY valid JSON. Do not include markdown formatting (like ```json), just the raw JSON string.
+5. CONSTRAINTS: 
+   - **NO IMPORTS ALLOWED**: The solution must use ONLY built-in Python logic (math, loops, lists, strings). 
+   - **PLAIN IDE**: `initial_code` MUST be minimal (e.g., just the function definition `def name():` and `pass`). DO NOT provide comments, hints, or partial solutions in `initial_code`. Let the user write the logic.
+   - **Level 1**: Should be a simple function (e.g., `def return_five(): return 5`) OR a simple print.
+
+SCHEMA:
 {{
   "title": "Concise Technical Title",
   "slug": "lvl-{level}-short-name",
-  "description": "Clear and direct instructions. What needs to be done.",
-  "initial_code": "The starting code provided to the user. Use newlines.",
-  "test_code": "Pytest-style assertions in check(scope) format. Use newlines, NO semicolons.",
-  "reference_solution": "Simple solution. Use newlines.",
+  "description": "Clear and direct instructions. What needs to be done. Explicitly state 'Do not use imports'.",
+  "initial_code": "def solution_name(arg):\\n    pass",
+  "test_code": "Pytest-style assertions inside check(scope).",
+  "reference_solution": "Simple solution. No imports. Use newlines.",
   "hint": "A helpful hint for the user.",
   "xp_reward": 50
 }}
 
 RULES:
-- Level 1 MUST be a simple print task or basic calculation.
 - Use clear, direct English.
 - NEVER use semicolons to separate statements in 'test_code' or 'initial_code'.
 - ALWAYS use actual newlines (`\\n` in JSON) for multiple statements.
@@ -29,16 +33,21 @@ RULES:
 TESTING INSTRUCTION (CRITICAL):
 - The `test_code` MUST define a function named `check(scope)`.
 - `scope` is a dictionary containing the user's defined variables and functions.
-- DO NOT just write asserts at the top level. Wrap them in `check(scope)`.
-- Correct Syntax Example:
+- **PREFERRED STRATEGY**: Ask the user to write a function (e.g., `add(a,b)`), and test it by calling it via `scope`:
   ```python
   def check(scope):
-      assert 'var' in scope
-      assert scope['var'] == 10
+      assert 'add' in scope, "Function 'add' must be defined"
+      assert scope['add'](2, 3) == 5
+      assert scope['add'](-1, 1) == 0
   ```
-- Incorrect Syntax (DO NOT DO THIS):
+- **STDOUT CHECKS (If needed)**: If you ask the user to `print`, use the global `output` variable which allows access to captured stdout.
+  - **ALWAYS** normalize `output` (strip whitespace, lowercase) to be forgiving.
+  - Example: "Print 'Hello World'"
   ```python
-  import sys; def check(scope): pass
+  def check(scope):
+      # Robust check
+      clean_out = output.strip().lower()
+      assert 'hello world' in clean_out, f"Expected 'Hello World', got: {{output}}"
   ```
 """
 
