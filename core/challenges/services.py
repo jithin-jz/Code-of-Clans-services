@@ -132,7 +132,7 @@ class ChallengeService:
                 xp_earned = challenge.xp_reward
                 XPService.add_xp(user, xp_earned, source="challenge_completion")
 
-            next_slug = ChallengeService._get_next_level_slug(challenge)
+            next_slug = ChallengeService._get_next_level_slug(challenge, user)
 
             return {
                 "status": "completed" if newly_completed else "already_completed",
@@ -224,9 +224,13 @@ class ChallengeService:
         return challenge
 
     @staticmethod
-    def _get_next_level_slug(current_challenge):
+    def _get_next_level_slug(current_challenge, user):
+        """Get the next level that belongs to this user or is global."""
         next_challenge = (
-            Challenge.objects.filter(order__gt=current_challenge.order)
+            Challenge.objects.filter(
+                Q(created_for_user__isnull=True) | Q(created_for_user=user),
+                order__gt=current_challenge.order
+            )
             .order_by("order")
             .first()
         )

@@ -26,6 +26,46 @@ class ChallengeSchema(BaseModel):
     hint: str = Field(description="A helpful hint for the user")
     slug: str = Field(description="A unique URL-safe identifier for the challenge")
 
+
+def validate_challenge_quality(challenge_data: dict, difficulty: str) -> tuple[bool, str]:
+    """
+    Validates that the generated challenge meets beginner-friendly quality standards.
+    Returns (is_valid, error_message).
+    """
+    # Word count limits by difficulty
+    word_limits = {
+        "Entry": 100,
+        "Basic": 120,
+        "Intermediate": 180,
+        "Advanced": 250
+    }
+    
+    description = challenge_data.get("description", "")
+    word_count = len(description.split())
+    max_words = word_limits.get(difficulty, 200)
+    
+    if word_count > max_words:
+        return False, f"Description too long: {word_count} words (max {max_words} for {difficulty})"
+    
+    # Check initial_code is minimal (no long comments or hints)
+    initial_code = challenge_data.get("initial_code", "")
+    if len(initial_code.split("\n")) > 5:
+        return False, "Initial code should be minimal (max 5 lines)"
+    
+    # Check test_code has friendly assertions
+    test_code = challenge_data.get("test_code", "")
+    if "assert" in test_code and "," not in test_code.split("assert")[1].split("\n")[0]:
+        # Assertion without error message
+        logger.warning("Test code may lack friendly error messages")
+    
+    # Check for required format elements in description
+    if difficulty in ["Entry", "Basic"]:
+        if "**Task:**" not in description and "Task:" not in description:
+            logger.warning("Description missing Task section")
+    
+    return True, ""
+
+
 def extract_json_from_response(raw_response: str) -> str:
     cleaned_response = raw_response.strip()
     # Remove markdown code block markers if present
@@ -101,6 +141,16 @@ class AutoGenerator:
 
             # Convert Pydantic model to Dict for further processing
             data_dict = challenge_data.model_dump()
+
+            # --- QUALITY VALIDATION ---
+            is_valid, validation_error = validate_challenge_quality(data_dict, blueprint["difficulty"])
+            if not is_valid:
+                logger.warning(f"Quality validation failed: {validation_error}")
+                if retry_count < 3:
+                    logger.info(f"Retrying Level {level_number} due to quality issues...")
+                    return await self.generate_level(level_number, retry_count + 1, user_id)
+                else:
+                    logger.warning("Quality validation failed but proceeding after max retries")
 
             # --- ENTROPY & NAMESPACING ---
             short_id = str(uuid.uuid4())[:8]

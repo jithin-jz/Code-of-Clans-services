@@ -95,6 +95,48 @@ class ChallengeViewSet(viewsets.ModelViewSet):
         Return list of challenges annotated with user progress (status, stars).
         """
         queryset = self.filter_queryset(self.get_queryset())
+        
+        # --- AI Level 1 Generation Trigger ---
+        # If user is authenticated, not staff (optional check), and has NO challenges available
+        if request.user.is_authenticated and not request.user.is_staff and not queryset.exists():
+             logger.info(f"No challenges found for {request.user.username}. Triggering AI generation for Level 1.")
+             
+             import requests
+             import time
+             ai_url = os.getenv("AI_SERVICE_URL", "http://ai:8002")
+             internal_key = os.getenv("INTERNAL_API_KEY")
+             
+             # Retry logic for AI service (may not be ready on startup)
+             max_retries = 3
+             for attempt in range(max_retries):
+                 try:
+                     # Synchronous call to AI service (background=false)
+                     resp = requests.post(
+                         f"{ai_url}/generate-level", 
+                         params={"level": 1, "user_id": request.user.id, "background": "false"},
+                         headers={"X-Internal-API-Key": internal_key},
+                         timeout=25  # Wait up to 25s for generation
+                     )
+                     
+                     if resp.status_code == 200:
+                         logger.info("AI Level 1 generation successful. Refreshing queryset.")
+                         # Refresh queryset to include the newly created level
+                         queryset = self.filter_queryset(self.get_queryset())
+                         break
+                     else:
+                         logger.error(f"AI Level 1 generation failed: {resp.text}")
+                         break  # Don't retry on non-connection errors
+                         
+                 except requests.exceptions.ConnectionError as e:
+                     if attempt < max_retries - 1:
+                         logger.warning(f"AI service not ready (attempt {attempt + 1}/{max_retries}), retrying in 2s...")
+                         time.sleep(2)
+                     else:
+                         logger.error(f"AI service unavailable after {max_retries} attempts: {e}")
+                 except Exception as e:
+                     logger.error(f"Error triggering AI Level 1: {e}")
+                     break
+        
         annotated_challenges = ChallengeService.get_annotated_challenges(
             request.user, queryset
         )

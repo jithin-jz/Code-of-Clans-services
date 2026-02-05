@@ -90,6 +90,7 @@ async def generate_single_level(
     background_tasks: BackgroundTasks, 
     level: int, 
     user_id: Optional[int] = None, 
+    background: bool = True, 
     x_internal_api_key: Optional[str] = Header(None, alias="X-Internal-API-Key")
 ):
     """
@@ -121,13 +122,24 @@ async def generate_single_level(
                 response = await client.post(url, json=challenge_json, headers=headers)
                 if response.status_code in [200, 201]:
                     logger.info(f"Level {lvl} generated and saved successfully for user {uid}.")
+                    return True
                 else:
                     logger.error(f"Failed to save Level {lvl}: {response.text}")
+                    return False
         except Exception as e:
             logger.error(f"Error generating single level {lvl}: {e}")
+            return False
 
-    background_tasks.add_task(_run_single, level, user_id)
-    return {"message": f"Generation started for level {level}"}
+    if background:
+        background_tasks.add_task(_run_single, level, user_id)
+        return {"message": f"Generation started for level {level}"}
+    else:
+        # Synchronous execution
+        success = await _run_single(level, user_id)
+        if success:
+             return {"message": f"Level {level} generated successfully"}
+        else:
+             raise HTTPException(status_code=500, detail="Failed to generate level")
 
 @app.post("/hints")
 async def generate_hint(
