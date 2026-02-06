@@ -27,8 +27,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "referral_code",
             "is_referred",
             "created_at",
-            "github_username",
-            "leetcode_username",
             "streak_freezes",
             "active_theme",
             "active_font",
@@ -90,9 +88,28 @@ class UserSerializer(serializers.ModelSerializer):
 
 class UserSummarySerializer(serializers.Serializer):
     username = serializers.CharField()
-    first_name = serializers.CharField()
-    avatar_url = serializers.URLField(allow_null=True)
-    is_following = serializers.BooleanField()
+    avatar_url = serializers.SerializerMethodField()
+    is_following = serializers.SerializerMethodField()
+    bio = serializers.SerializerMethodField()
+
+    def get_avatar_url(self, obj):
+        if hasattr(obj, 'profile') and obj.profile.avatar:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.profile.avatar.url)
+            from django.conf import settings
+            return f"{settings.BACKEND_URL}{obj.profile.avatar.url}"
+        return None
+
+    def get_is_following(self, obj):
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            # Check if request.user is following obj (the user in the summary)
+            return request.user.following.filter(following=obj).exists()
+        return False
+
+    def get_bio(self, obj):
+        return obj.profile.bio if hasattr(obj, 'profile') else ""
 
 
 class FollowToggleResponseSerializer(serializers.Serializer):

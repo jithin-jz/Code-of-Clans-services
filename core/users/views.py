@@ -46,7 +46,7 @@ class ProfileUpdateView(APIView):
 
     **Supported Updates:**
     - **Identity**: `username`, `first_name`, `last_name`
-    - **Profile**: `bio`, `github_username`, `leetcode_username`
+    - **Profile**: `bio`
     - **Media**: `avatar`, `banner` (File uploads)
 
     Returns the updated user object.
@@ -72,10 +72,6 @@ class ProfileUpdateView(APIView):
         profile = user.profile
         if "bio" in data:
             profile.bio = data["bio"]
-        if "github_username" in data:
-            profile.github_username = data["github_username"]
-        if "leetcode_username" in data:
-            profile.leetcode_username = data["leetcode_username"]
 
         # 3. Handle File Uploads (to Supabase Storage)
         # 3. Handle File Uploads (Native Django Storage)
@@ -359,6 +355,10 @@ class SuggestedUsersView(APIView):
         
         suggested = User.objects.exclude(
             id__in=list(following_ids) + [request.user.id]
+        ).exclude(
+            is_superuser=True
+        ).exclude(
+            is_staff=True
         ).select_related('profile').order_by('?')[:5]
 
         data = []
@@ -368,7 +368,7 @@ class SuggestedUsersView(APIView):
                 "username": user.username,
                 "first_name": user.first_name,
                 "avatar_url": (
-                    f"{settings.BACKEND_URL}{profile.avatar.url}"
+                    request.build_absolute_uri(profile.avatar.url)
                     if profile and profile.avatar
                     else None
                 ),

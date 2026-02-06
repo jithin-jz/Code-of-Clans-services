@@ -1,8 +1,7 @@
-from django.urls import path
-from .views import PostListCreateView, PostDeleteView, PostLikeToggleView
+from rest_framework.routers import DefaultRouter
+from .views import PostViewSet
 
-urlpatterns = [
-    path('', PostListCreateView.as_view(), name='post-list-create'),
-    path('<int:pk>/', PostDeleteView.as_view(), name='post-delete'),
-    path('<int:pk>/like/', PostLikeToggleView.as_view(), name='post-like-toggle'),
-]
+router = DefaultRouter()
+router.register(r'', PostViewSet, basename='post')
+
+urlpatterns = router.urls

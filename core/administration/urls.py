@@ -3,6 +3,7 @@ from .views import (
     AdminStatsView,
     UserListView,
     UserBlockToggleView,
+    UserDeleteView,
 )
 
 urlpatterns = [
@@ -12,5 +13,10 @@ urlpatterns = [
         "users/<str:username>/toggle-block/",
         UserBlockToggleView.as_view(),
         name="admin_toggle_block_user",
+    ),
+    path(
+        "users/<str:username>/delete/",
+        UserDeleteView.as_view(),
+        name="admin_delete_user",
     ),
 ]

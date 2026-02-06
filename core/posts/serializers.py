@@ -22,6 +22,3 @@ class PostSerializer(serializers.ModelSerializer):
             return obj.likes.filter(id=request.user.id).exists()
         return False
 
-    def create(self, validated_data):
-        user = self.context['request'].user
-        return Post.objects.create(user=user, **validated_data)

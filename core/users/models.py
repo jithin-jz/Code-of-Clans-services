@@ -69,8 +69,6 @@ class UserProfile(models.Model):
     refresh_token = models.TextField(blank=True, null=True)
 
     # Linked Platforms (For display/social features, not auth)
-    github_username = models.CharField(max_length=100, blank=True, null=True)
-    leetcode_username = models.CharField(max_length=100, blank=True, null=True)
 
     # Customization
     active_theme = models.CharField(

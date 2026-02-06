@@ -123,3 +123,37 @@ class UserBlockToggleView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class UserDeleteView(APIView):
+    """View to delete a user account."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=None,
+        responses={200: OpenApiTypes.OBJECT},
+        description="Delete a user account (Admin only).",
+    )
+    def delete(self, request, username):
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        if user == request.user:
+            return Response(
+                {"error": "Cannot delete yourself"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user.delete()
+
+        return Response(
+            {"message": f"User {username} deleted successfully"},
+            status=status.HTTP_200_OK,
+        )
