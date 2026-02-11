@@ -1,0 +1,20 @@
+time="2026-02-11T13:44:47+05:30" level=warning msg="C:\\Users\\Jithi\\Desktop\\coc\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+Creating test database for alias 'default'...
+Found 1 test(s).
+System check identified no issues (0 silenced).
+Response status: 404
+E
+======================================================================
+ERROR: test_create_comment (posts.tests.CommentTests.test_create_comment)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/app/posts/tests.py", line 18, in test_create_comment
+    print(f"Response data: {response.data}")
+                            ^^^^^^^^^^^^^
+AttributeError: 'HttpResponseNotFound' object has no attribute 'data'
+
+----------------------------------------------------------------------
+Ran 1 test in 0.144s
+
+FAILED (errors=1)
+Destroying test database for alias 'default'...

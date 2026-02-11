@@ -26,7 +26,7 @@ def generate_access_token(user):
         "email": user.email,
         "avatar_url": (
             (
-                f"{settings.BACKEND_URL}{user.profile.avatar.url}"
+                f"{settings.BACKEND_URL.rstrip('/')}{user.profile.avatar.url}"
                 if user.profile.avatar
                 else None
             )

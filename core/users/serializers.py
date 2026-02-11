@@ -10,8 +10,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     is_referred = serializers.SerializerMethodField()
 
     # Map ImageFields to URLs for frontend compatibility
-    avatar_url = serializers.ImageField(source="avatar", read_only=True)
-    banner_url = serializers.ImageField(source="banner", read_only=True)
+    avatar_url = serializers.SerializerMethodField()
+    banner_url = serializers.SerializerMethodField()
 
     class Meta:
         model = UserProfile
@@ -38,6 +38,24 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_is_referred(self, obj):
         # Boolean derived from presence of a referrer
         return obj.referred_by is not None
+
+    def get_avatar_url(self, obj):
+        if obj.avatar:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.avatar.url)
+            from django.conf import settings
+            return f"{settings.BACKEND_URL.rstrip('/')}{obj.avatar.url}"
+        return None
+
+    def get_banner_url(self, obj):
+        if obj.banner:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.banner.url)
+            from django.conf import settings
+            return f"{settings.BACKEND_URL.rstrip('/')}{obj.banner.url}"
+        return None
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -98,7 +116,7 @@ class UserSummarySerializer(serializers.Serializer):
             if request:
                 return request.build_absolute_uri(obj.profile.avatar.url)
             from django.conf import settings
-            return f"{settings.BACKEND_URL}{obj.profile.avatar.url}"
+            return f"{settings.BACKEND_URL.rstrip('/')}{obj.profile.avatar.url}"
         return None
 
     def get_is_following(self, obj):

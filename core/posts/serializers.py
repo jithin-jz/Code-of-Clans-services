@@ -2,6 +2,9 @@ from rest_framework import serializers
 from .models import Post
 from users.serializers import UserSummarySerializer
 
+
+
+
 class PostSerializer(serializers.ModelSerializer):
     user = UserSummarySerializer(read_only=True)
     is_liked = serializers.SerializerMethodField()

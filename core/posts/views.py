@@ -6,6 +6,9 @@ from .models import Post
 from .serializers import PostSerializer
 from .permissions import IsOwnerOrReadOnly
 
+
+
+
 class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all().select_related('user').prefetch_related('likes')
     serializer_class = PostSerializer
