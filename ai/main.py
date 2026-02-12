@@ -3,6 +3,7 @@ import sys
 import logging
 from typing import Optional
 import httpx
+import asyncio
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -118,9 +119,9 @@ async def generate_hint(
     similar_docs = []
     try:
         query = f"Challenge: {challenge_description}\n\nUser Code: {request.user_code}"
-        # using standard sync method for now as chroma python client is sync-heavy
-        # wrapping in loop.run_in_executor might be better but let's keep it simple for this pass
-        results = vector_db.similarity_search(query, k=2)
+        # wrapping in asyncio.to_thread to prevent blocking the event loop
+        loop = asyncio.get_running_loop()
+        results = await loop.run_in_executor(None, lambda: vector_db.similarity_search(query, k=2))
         similar_docs = [doc.page_content for doc in results if doc.metadata.get("slug") != request.challenge_slug]
     except Exception as e:
         logger.warning(f"RAG Search failed: {e}. Proceeding without extra context.")
