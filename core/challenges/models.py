@@ -26,6 +26,12 @@ class Challenge(models.Model):
     time_limit = models.IntegerField(
         default=300, help_text="Suggested time in seconds for bonus"
     )
+    
+    # Star rating target time
+    target_time_seconds = models.IntegerField(
+        default=600,
+        help_text="Target completion time for 3-star rating (10 minutes default)"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -37,24 +43,6 @@ class Challenge(models.Model):
         user_str = f" [User: {self.created_for_user.username}]" if self.created_for_user else " [Global]"
         return f"{self.order}. {self.title}{user_str}"
 
-
-class Hint(models.Model):
-    """
-    Hints for a specific challenge.
-    """
-
-    challenge = models.ForeignKey(
-        Challenge, related_name="hints", on_delete=models.CASCADE
-    )
-    content = models.TextField()
-    cost = models.IntegerField(default=10, help_text="XP cost to unlock this hint")
-    order = models.IntegerField(default=1, help_text="Sequence of the hint")
-
-    class Meta:
-        ordering = ["order"]
-
-    def __str__(self):
-        return f"Hint {self.order} for {self.challenge.title}"
 
 
 class UserProgress(models.Model):
@@ -80,9 +68,13 @@ class UserProgress(models.Model):
     ai_hints_purchased = models.IntegerField(
         default=0, help_text="Number of AI hints purchased for this level."
     )
-    hints_unlocked = models.ManyToManyField(
-        Hint, blank=True, related_name="unlocked_by"
+    
+    # Time tracking for star rating
+    started_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When user first accessed this challenge"
     )
+    
     completed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -94,14 +86,14 @@ class UserProgress(models.Model):
 
 class UserCertificate(models.Model):
     """
-    Certificate issued when user completes 49 challenges.
+    Certificate issued when user completes all 53 challenges.
     """
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='certificate')
     certificate_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     issued_date = models.DateTimeField(auto_now_add=True)
     certificate_image = models.ImageField(upload_to='certificates/', null=True, blank=True)
     is_valid = models.BooleanField(default=True)
-    completion_count = models.IntegerField(default=49, help_text="Number of challenges completed")
+    completion_count = models.IntegerField(help_text="Number of challenges completed when certificate was issued")
     
     class Meta:
         ordering = ['-issued_date']

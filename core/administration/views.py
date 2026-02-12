@@ -13,6 +13,7 @@ from django.db.models import Sum, Avg, Count
 from users.models import UserProfile
 from users.serializers import UserSerializer
 from .models import AdminAuditLog
+from .permissions import IsAdminUser
 from .serializers import (
     AdminStatsSerializer,
     AdminAuditLogSerializer,
@@ -37,7 +38,7 @@ def log_admin_action(admin, action, target_user=None, details=None):
 class AdminStatsView(APIView):
     """View to get admin dashboard statistics."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     @extend_schema(
         responses={
@@ -47,9 +48,6 @@ class AdminStatsView(APIView):
         description="Get administration statistics.",
     )
     def get(self, request):
-        if not (request.user.is_staff or request.user.is_superuser):
-            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
-
         total_users = User.objects.count()
 
         # Active sessions in last 24 hours
@@ -77,7 +75,7 @@ class AdminStatsView(APIView):
 class UserListView(APIView):
     """View to list all users for admin."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = UserSerializer
 
     @extend_schema(
@@ -88,9 +86,6 @@ class UserListView(APIView):
         description="List all users (Admin only).",
     )
     def get(self, request):
-        if not (request.user.is_staff or request.user.is_superuser):
-            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
-
         users = User.objects.all().order_by("-date_joined")
         return Response(
             UserSerializer(users, many=True, context={"request": request}).data,
@@ -101,7 +96,7 @@ class UserListView(APIView):
 class UserBlockToggleView(APIView):
     """View to toggle user active status."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     @extend_schema(
         request=None,
@@ -109,9 +104,6 @@ class UserBlockToggleView(APIView):
         description="Toggle user active status (block/unblock).",
     )
     def post(self, request, username):
-        if not (request.user.is_staff or request.user.is_superuser):
-            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
-
         try:
             user = User.objects.get(username=username)
         except User.DoesNotExist:
@@ -187,16 +179,13 @@ class UserDeleteView(APIView):
 
 class ChallengeAnalyticsView(APIView):
     """View to get detailed challenge performance analytics."""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     @extend_schema(
         responses={200: ChallengeAnalyticsSerializer(many=True)},
         description="Get detailed challenge performance analytics.",
     )
     def get(self, request):
-        if not (request.user.is_staff or request.user.is_superuser):
-            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
-
         challenges = Challenge.objects.all()
         analytics_data = []
 
@@ -225,16 +214,13 @@ class ChallengeAnalyticsView(APIView):
 
 class StoreAnalyticsView(APIView):
     """View to get store economy and item popularity."""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     @extend_schema(
         responses={200: StoreAnalyticsSerializer},
         description="Get store economy and item popularity analytics.",
     )
     def get(self, request):
-        if not (request.user.is_staff or request.user.is_superuser):
-            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
-
         items = StoreItem.objects.annotate(
             purchase_count=Count("purchases")
         ).order_by("-purchase_count")
@@ -259,15 +245,16 @@ class StoreAnalyticsView(APIView):
 
 class GlobalNotificationView(APIView):
     """View to send notifications to all users."""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     def post(self, request):
-        if not (request.user.is_staff or request.user.is_superuser):
-            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
-
         verb = request.data.get("message")
         if not verb:
             return Response({"error": "Message is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate message length
+        if len(verb) > 500:
+            return Response({"error": "Message too long (max 500 characters)"}, status=status.HTTP_400_BAD_REQUEST)
 
         users = User.objects.all()
         notifications = [
@@ -287,16 +274,13 @@ class GlobalNotificationView(APIView):
 
 class AdminAuditLogView(APIView):
     """View to retrieve administrative action logs."""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     @extend_schema(
         responses={200: AdminAuditLogSerializer(many=True)},
         description="Retrieve administrative action logs.",
     )
     def get(self, request):
-        if not (request.user.is_staff or request.user.is_superuser):
-            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
-
         logs = AdminAuditLog.objects.all()[:100]  # Last 100 actions
         serializer = AdminAuditLogSerializer(logs, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -305,12 +289,9 @@ class AdminAuditLogView(APIView):
 
 class SystemIntegrityView(APIView):
     """View to check core system health and counts."""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
 
     def get(self, request):
-        if not (request.user.is_staff or request.user.is_superuser):
-            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
-
         data = {
             "users": User.objects.count(),
             "challenges": Challenge.objects.count(),

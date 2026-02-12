@@ -49,6 +49,15 @@ async def on_startup():
 async def health_check():
     return JSONResponse(content={"status": "ok", "service": "chat"}, status_code=status.HTTP_200_OK)
 
+# Global Exception Handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc: Exception):
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        content={"error": "Internal server error"},
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+    )
+
 @app.get("/history/{room}")
 async def get_message_history(room: str, limit: int = 50, offset: int = 0, token: str = ""):
     """Get paginated message history for a room."""

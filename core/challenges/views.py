@@ -1,26 +1,29 @@
-from rest_framework import viewsets, status, decorators, serializers
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
-from django.shortcuts import get_object_or_404
-from django.utils import timezone
-from django.db.models import Count, Q
-from rest_framework.views import APIView
 import logging
-
-logger = logging.getLogger(__name__)
-
+from django.shortcuts import get_object_or_404
+from django.db.models import Q, Avg, Sum, Count, F, Prefetch
+from django.utils import timezone
+from django.contrib.auth.models import User
+from rest_framework import viewsets, status, decorators, serializers
+from rest_framework.decorators import action, permission_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema, OpenApiTypes, inline_serializer
+import json
+from datetime import datetime, timedelta
 
-from .models import Challenge, Hint, UserProgress, UserCertificate
+from .models import Challenge, UserProgress, UserCertificate
+from .services import ChallengeService
+from .certificate_service import CertificateService
 from .serializers import (
     ChallengeSerializer,
-    HintSerializer,
     UserProgressSerializer,
     UserCertificateSerializer,
 )
-from .services import ChallengeService
 from users.models import UserProfile
-from django.contrib.auth.models import User
+
+logger = logging.getLogger(__name__)
+
 
 
 class ChallengeViewSet(viewsets.ModelViewSet):
@@ -110,10 +113,8 @@ class ChallengeViewSet(viewsets.ModelViewSet):
 
         data["status"] = details["status"]
         data["stars"] = details["stars"]
-        data["unlocked_hints"] = HintSerializer(
-            details["unlocked_hints"], many=True
-        ).data
         data["ai_hints_purchased"] = details["ai_hints_purchased"]
+        data["started_at"] = details["started_at"].isoformat() if details["started_at"] else None
 
         return Response(data)
 
@@ -211,36 +212,7 @@ class ChallengeViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_402_PAYMENT_REQUIRED
                 )
 
-    @extend_schema(
-        request=inline_serializer(
-            name="UnlockHintRequest",
-            fields={
-                "hint_order": serializers.IntegerField(default=1),
-            }
-        ),
-        responses={
-            200: HintSerializer,
-            402: OpenApiTypes.OBJECT,
-            404: OpenApiTypes.OBJECT,
-        },
-        description="Unlock a hint for a challenge.",
-    )
-    @decorators.action(detail=True, methods=["post"])
-    def unlock_hint(self, request, slug=None):
-        challenge = self.get_object()
-        hint_order = request.data.get("hint_order", 1)
 
-        try:
-            hint = ChallengeService.unlock_hint(request.user, challenge, hint_order)
-            return Response(HintSerializer(hint).data, status=status.HTTP_200_OK)
-        except Hint.DoesNotExist:
-            return Response(
-                {"error": "Hint not found"}, status=status.HTTP_404_NOT_FOUND
-            )
-        except PermissionError:
-            return Response(
-                {"error": "Insufficient XP"}, status=status.HTTP_402_PAYMENT_REQUIRED
-            )
 
     @extend_schema(
         request=inline_serializer(
@@ -457,35 +429,34 @@ class CertificateViewSet(viewsets.ViewSet):
         """
         user = request.user
         
-        # Check eligibility (53 completed challenges)
-        from .models import UserProgress
-        completed_count = UserProgress.objects.filter(
-            user=user,
-            status=UserProgress.Status.COMPLETED
-        ).count()
-        
-        if completed_count < 53:
+        # Check eligibility using CertificateService
+        if not CertificateService.is_eligible(user):
+            status_info = CertificateService.get_eligibility_status(user)
             return Response(
-                {"error": "You need to complete 53 challenges to earn a certificate."},
+                {
+                    "error": f"You need to complete {CertificateService.TOTAL_CHALLENGES} challenges to earn a certificate.",
+                    "completed": status_info['completed_challenges'],
+                    "required": status_info['required_challenges'],
+                    "remaining": status_info['remaining_challenges']
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         try:
-            # Try to get existing certificate
-            certificate = UserCertificate.objects.get(user=user)
-        except UserCertificate.DoesNotExist:
-            # Generate new certificate record (No image generation needed)
-            try:
-                certificate = UserCertificate.objects.create(
-                    user=user,
-                    completion_count=completed_count
-                )
-            except Exception as e:
-                logger.error(f"Failed to create certificate record for {user.username}: {e}")
-                return Response(
-                    {"error": "Failed to generate certificate. Please try again later."},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
+            # Get or create certificate using service
+            certificate = CertificateService.get_or_create_certificate(user)
+        except ValueError as e:
+            logger.error(f"Certificate eligibility check failed for {user.username}: {e}")
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Failed to create certificate record for {user.username}: {e}")
+            return Response(
+                {"error": "Failed to generate certificate. Please try again later."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
         serializer = UserCertificateSerializer(certificate, context={'request': request})
         return Response(serializer.data)
@@ -511,15 +482,7 @@ class CertificateViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
     
-    @decorators.action(detail=False, methods=['get'])
-    def download(self, request):
-        """
-        Deprecated. Download is now handled client-side.
-        """
-        return Response(
-            {"error": "Please download the certificate from your dashboard."},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+
     
     @decorators.action(detail=False, methods=['get'])
     def check_eligibility(self, request):
@@ -528,19 +491,5 @@ class CertificateViewSet(viewsets.ViewSet):
         GET /api/certificates/check_eligibility/
         """
         user = request.user
-        
-        from .models import UserProgress
-        completed_count = UserProgress.objects.filter(
-            user=user,
-            status=UserProgress.Status.COMPLETED
-        ).count()
-        
-        full_curriculum_count = 53
-        is_eligible = completed_count >= full_curriculum_count
-        
-        return Response({
-            "eligible": is_eligible,
-            "completed_challenges": completed_count,
-            "required_challenges": full_curriculum_count,
-            "has_certificate": UserCertificate.objects.filter(user=user).exists()
-        })
+        status_info = CertificateService.get_eligibility_status(user)
+        return Response(status_info)

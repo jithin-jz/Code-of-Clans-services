@@ -1,17 +1,11 @@
 from django.contrib import admin
-from .models import Challenge, Hint, UserProgress
-
-
-class HintInline(admin.TabularInline):
-    model = Hint
-    extra = 1
+from .models import Challenge, UserProgress
 
 
 @admin.register(Challenge)
 class ChallengeAdmin(admin.ModelAdmin):
-    list_display = ("title", "order", "xp_reward", "slug")
+    list_display = ("title", "order", "xp_reward", "slug", "target_time_seconds")
     prepopulated_fields = {"slug": ("title",)}
-    inlines = [HintInline]
     search_fields = ("title", "description")
 
 

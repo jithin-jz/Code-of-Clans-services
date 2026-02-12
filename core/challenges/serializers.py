@@ -1,11 +1,5 @@
 from rest_framework import serializers
-from .models import Challenge, Hint, UserProgress, UserCertificate
-
-
-class HintSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Hint
-        fields = ["id", "content", "cost", "order"]
+from .models import Challenge, UserProgress, UserCertificate
 
 
 class ChallengeSerializer(serializers.ModelSerializer):

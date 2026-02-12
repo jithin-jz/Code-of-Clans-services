@@ -1,6 +1,6 @@
 from django.utils import timezone
 from django.db.models import Max, Q
-from .models import Challenge, UserProgress, Hint
+from .models import Challenge, UserProgress
 from users.models import UserProfile
 from xpoint.services import XPService
 
@@ -59,19 +59,20 @@ class ChallengeService:
     @staticmethod
     def get_challenge_details(user, challenge):
         """
-        Retrieves detailed challenge info including unlocked hints and current status.
+        Retrieves detailed challenge info and tracks start time.
         """
-        progress, _ = UserProgress.objects.get_or_create(user=user, challenge=challenge)
+        progress, created = UserProgress.objects.get_or_create(user=user, challenge=challenge)
 
-        # Use annotated list logic to determine if effectively unlocked if record exists but is locked
-        # For simplicity, we assume if they can access the detail page, they likely can see it,
-        # but strictly we might want to check the previous level here.
+        # Set start time on first access
+        if not progress.started_at:
+            progress.started_at = timezone.now()
+            progress.save(update_fields=['started_at'])
 
         return {
             "status": progress.status,
             "stars": progress.stars,
-            "unlocked_hints": progress.hints_unlocked.all(),
             "ai_hints_purchased": progress.ai_hints_purchased,
+            "started_at": progress.started_at,
         }
 
     @staticmethod
@@ -84,21 +85,24 @@ class ChallengeService:
 
         progress, _ = UserProgress.objects.get_or_create(user=user, challenge=challenge)
 
-        # Calculate Stars based on static hints used
-        # 0-1 Hints: 3 Stars (First hint is free/safe)
-        # 2 Hints: 2 Stars
-        # 3+ Hints: 1 Star
+        # Calculate Stars based on AI hints and completion time
+        # 3 Stars: No AI hints + fast completion
+        # 2 Stars: 1 AI hint OR moderate time
+        # 1 Star: 2+ AI hints OR very slow
         
-        hints_used = progress.hints_unlocked.count()
+        stars = 3
         
-        if hints_used >= 3:
-            stars = 1
-        elif hints_used == 2:
-            stars = 2
-        else:
-            # 0 or 1 hint used
-            stars = 3
-            
+        # Penalty for AI hints (-1 star per hint)
+        stars -= progress.ai_hints_purchased
+        
+        # Penalty for slow completion time
+        if progress.started_at:
+            completion_time = (timezone.now() - progress.started_at).total_seconds()
+            # Lose 1 star if took more than 2x target time
+            if completion_time > 2 * challenge.target_time_seconds:
+                stars -= 1
+        
+        # Ensure minimum 1 star
         stars = max(1, stars)
 
         newly_completed = progress.status != UserProgress.Status.COMPLETED
@@ -119,53 +123,17 @@ class ChallengeService:
 
         next_slug = ChallengeService._get_next_level_slug(challenge, user)
         
-        # Check for Certificate Trigger (Level 53 completed)
-        certificate_data = {}
-        if challenge.order == 53:
-            try:
-                from .certificate_generator import CertificateGenerator
-                generator = CertificateGenerator()
-                if generator.is_eligible(user):
-                        cert = generator.generate_certificate(user)
-                        certificate_data = {
-                            "certificate_unlocked": True,
-                            "certificate_id": str(cert.certificate_id),
-                             # Ensure this relative path matches what frontend expects
-                            "certificate_url": f"/api/certificates/download/" 
-                        }
-            except Exception as e:
-                # Log error but don't fail the submission
-                print(f"Error generating certificate: {e}")
+        # Certificate generation now handled automatically by signals
+        # Signal triggers when user completes all 53 challenges
 
-        result_data = {
+        return {
             "status": "completed" if newly_completed else "already_completed",
             "xp_earned": xp_earned if newly_completed else 0,
             "stars": stars,
             "next_level_slug": next_slug,
         }
-        result_data.update(certificate_data)
-        
-        return result_data
 
-    @staticmethod
-    def unlock_hint(user, challenge, hint_order):
-        """
-        Unlocks a specific hint for a user, deducting XP.
-        Raises Hint.DoesNotExist or PermissionError.
-        """
-        hint = Hint.objects.get(challenge=challenge, order=hint_order)
 
-        progress, _ = UserProgress.objects.get_or_create(user=user, challenge=challenge)
-
-        if progress.hints_unlocked.filter(id=hint.id).exists():
-            return hint  # Already unlocked
-
-        if user.profile.xp >= hint.cost:
-            XPService.add_xp(user, -hint.cost, source="hint_unlock")
-            progress.hints_unlocked.add(hint)
-            return hint
-        else:
-            raise PermissionError("Insufficient XP")
 
     @staticmethod
     def purchase_ai_assist(user, challenge):
