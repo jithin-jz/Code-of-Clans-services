@@ -38,7 +38,7 @@ INSTALLED_APPS = [
     "users",
     "xpoint",
     "payments",
-    "store",  # New App
+    "store",
     "challenges",
     "django_celery_beat",
     "django_celery_results",

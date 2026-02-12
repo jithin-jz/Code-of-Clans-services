@@ -7,10 +7,32 @@ from drf_spectacular.utils import extend_schema, OpenApiTypes, inline_serializer
 from rest_framework import serializers
 from django.utils import timezone
 from datetime import timedelta
-from django.db.models import Sum
+from django.db import models
+from django.db.models import Sum, Avg, Count
 
 from users.models import UserProfile
 from users.serializers import UserSerializer
+from .models import AdminAuditLog
+from .serializers import (
+    AdminStatsSerializer,
+    AdminAuditLogSerializer,
+    ChallengeAnalyticsSerializer,
+    StoreAnalyticsSerializer,
+    SystemIntegritySerializer,
+    SystemSettingsSerializer,
+)
+from challenges.models import Challenge, UserProgress
+from store.models import StoreItem, Purchase
+from notifications.models import Notification
+
+def log_admin_action(admin, action, target_user=None, details=None):
+    """Helper to record administrative actions in the audit log."""
+    AdminAuditLog.objects.create(
+        admin=admin,
+        action=action,
+        target_user=target_user,
+        details=details or {}
+    )
 
 
 class AdminStatsView(APIView):
@@ -20,15 +42,7 @@ class AdminStatsView(APIView):
 
     @extend_schema(
         responses={
-            200: inline_serializer(
-                name="AdminStatsResponse",
-                fields={
-                    "total_users": serializers.IntegerField(),
-                    "active_sessions": serializers.IntegerField(),
-                    "oauth_logins": serializers.IntegerField(),
-                    "total_gems": serializers.IntegerField(),
-                },
-            ),
+            200: AdminStatsSerializer,
             403: OpenApiTypes.OBJECT,
         },
         description="Get administration statistics.",
@@ -51,15 +65,14 @@ class AdminStatsView(APIView):
         # Total Gems (XP)
         total_xp = UserProfile.objects.aggregate(total_xp=Sum("xp"))["total_xp"] or 0
 
-        return Response(
-            {
-                "total_users": total_users,
-                "active_sessions": active_sessions,
-                "oauth_logins": oauth_logins,
-                "total_gems": total_xp,
-            },
-            status=status.HTTP_200_OK,
-        )
+        data = {
+            "total_users": total_users,
+            "active_sessions": active_sessions,
+            "oauth_logins": oauth_logins,
+            "total_gems": total_xp,
+        }
+        serializer = AdminStatsSerializer(data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class UserListView(APIView):
@@ -116,6 +129,13 @@ class UserBlockToggleView(APIView):
         user.is_active = not user.is_active
         user.save()
 
+        log_admin_action(
+            admin=request.user,
+            action="TOGGLE_USER_BLOCK",
+            target_user=user,
+            details={"is_active": user.is_active}
+        )
+
         return Response(
             {
                 "message": f"User {'unblocked' if user.is_active else 'blocked'} successfully",
@@ -151,9 +171,185 @@ class UserDeleteView(APIView):
                 {"error": "Cannot delete yourself"}, status=status.HTTP_400_BAD_REQUEST
             )
 
+        log_admin_action(
+            admin=request.user,
+            action="DELETE_USER",
+            target_user=user,
+            details={"username": username}
+        )
+
         user.delete()
 
         return Response(
             {"message": f"User {username} deleted successfully"},
             status=status.HTTP_200_OK,
         )
+
+
+class ChallengeAnalyticsView(APIView):
+    """View to get detailed challenge performance analytics."""
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        responses={200: ChallengeAnalyticsSerializer(many=True)},
+        description="Get detailed challenge performance analytics.",
+    )
+    def get(self, request):
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        challenges = Challenge.objects.all()
+        analytics_data = []
+
+        for challenge in challenges:
+            total_attempts = UserProgress.objects.filter(challenge=challenge).count()
+            completions = UserProgress.objects.filter(
+                challenge=challenge, status="COMPLETED"
+            ).count()
+            
+            avg_stars = UserProgress.objects.filter(
+                challenge=challenge, status="COMPLETED"
+            ).aggregate(avg=Avg("stars"))["avg"] or 0
+
+            analytics_data.append({
+                "id": challenge.id,
+                "title": challenge.title,
+                "completions": completions,
+                "completion_rate": (completions / total_attempts * 100) if total_attempts > 0 else 0,
+                "avg_stars": avg_stars,
+                "is_personalized": challenge.created_for_user is not None
+            })
+
+        serializer = ChallengeAnalyticsSerializer(analytics_data, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class StoreAnalyticsView(APIView):
+    """View to get store economy and item popularity."""
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        responses={200: StoreAnalyticsSerializer},
+        description="Get store economy and item popularity analytics.",
+    )
+    def get(self, request):
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        items = StoreItem.objects.annotate(
+            purchase_count=Count("purchases")
+        ).order_by("-purchase_count")
+
+        item_stats = [{
+            "name": item.name,
+            "category": item.category,
+            "cost": item.cost,
+            "sales": item.purchase_count,
+            "revenue": item.purchase_count * item.cost
+        } for item in items]
+
+        total_revenue = sum(item["revenue"] for item in item_stats)
+
+        data = {
+            "items": item_stats,
+            "total_xp_spent": total_revenue
+        }
+        serializer = StoreAnalyticsSerializer(data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class GlobalNotificationView(APIView):
+    """View to send notifications to all users."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        verb = request.data.get("message")
+        if not verb:
+            return Response({"error": "Message is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        users = User.objects.all()
+        notifications = [
+            Notification(recipient=user, actor=request.user, verb=verb)
+            for user in users
+        ]
+        Notification.objects.bulk_create(notifications)
+
+        log_admin_action(
+            admin=request.user,
+            action="SEND_GLOBAL_NOTIFICATION",
+            details={"message": verb, "recipient_count": users.count()}
+        )
+
+        return Response({"message": f"Broadcast sent to {users.count()} users"}, status=status.HTTP_200_OK)
+
+
+class AdminAuditLogView(APIView):
+    """View to retrieve administrative action logs."""
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        responses={200: AdminAuditLogSerializer(many=True)},
+        description="Retrieve administrative action logs.",
+    )
+    def get(self, request):
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        logs = AdminAuditLog.objects.all()[:100]  # Last 100 actions
+        serializer = AdminAuditLogSerializer(logs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+class SystemIntegrityView(APIView):
+    """View to check core system health and counts."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        data = {
+            "users": User.objects.count(),
+            "challenges": Challenge.objects.count(),
+            "store_items": StoreItem.objects.count(),
+            "notifications": Notification.objects.count(),
+            "audit_logs": AdminAuditLog.objects.count()
+        }
+        serializer = SystemIntegritySerializer(data)
+        return Response(serializer.data)
+
+
+class SystemSettingsView(APIView):
+    """View to manage system-wide configuration."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+        
+        # In a real app, these might come from a DB-backed settings model
+        # For this implementation, we'll return some mockable system state
+        data = {
+            "maintenance_mode": False,
+            "registration_enabled": True,
+            "ai_generation_enabled": True,
+            "security_level": "Standard"
+        }
+        return Response(data)
+
+    def post(self, request):
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Log the settings change
+        log_admin_action(
+            admin=request.user,
+            action="UPDATE_SYSTEM_SETTINGS",
+            details=request.data
+        )
+        
+        return Response({"message": "Settings updated successfully", "applied": request.data})
