@@ -19,7 +19,6 @@ from .serializers import (
     ChallengeAnalyticsSerializer,
     StoreAnalyticsSerializer,
     SystemIntegritySerializer,
-    SystemSettingsSerializer,
 )
 from challenges.models import Challenge, UserProgress
 from store.models import StoreItem, Purchase
@@ -323,33 +322,3 @@ class SystemIntegrityView(APIView):
         return Response(serializer.data)
 
 
-class SystemSettingsView(APIView):
-    """View to manage system-wide configuration."""
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        if not (request.user.is_staff or request.user.is_superuser):
-            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
-        
-        # In a real app, these might come from a DB-backed settings model
-        # For this implementation, we'll return some mockable system state
-        data = {
-            "maintenance_mode": False,
-            "registration_enabled": True,
-            "ai_generation_enabled": True,
-            "security_level": "Standard"
-        }
-        return Response(data)
-
-    def post(self, request):
-        if not (request.user.is_staff or request.user.is_superuser):
-            return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
-        
-        # Log the settings change
-        log_admin_action(
-            admin=request.user,
-            action="UPDATE_SYSTEM_SETTINGS",
-            details=request.data
-        )
-        
-        return Response({"message": "Settings updated successfully", "applied": request.data})

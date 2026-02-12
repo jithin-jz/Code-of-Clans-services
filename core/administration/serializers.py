@@ -42,8 +42,3 @@ class SystemIntegritySerializer(serializers.Serializer):
     notifications = serializers.IntegerField()
     audit_logs = serializers.IntegerField()
 
-class SystemSettingsSerializer(serializers.Serializer):
-    maintenance_mode = serializers.BooleanField()
-    registration_enabled = serializers.BooleanField()
-    ai_generation_enabled = serializers.BooleanField()
-    security_level = serializers.CharField()

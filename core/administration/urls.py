@@ -9,7 +9,6 @@ from .views import (
     GlobalNotificationView,
     AdminAuditLogView,
     SystemIntegrityView,
-    SystemSettingsView,
 )
 
 urlpatterns = [
@@ -30,5 +29,4 @@ urlpatterns = [
         name="admin_delete_user",
     ),
     path("system/integrity/", SystemIntegrityView.as_view(), name="admin_system_integrity"),
-    path("system/settings/", SystemSettingsView.as_view(), name="admin_system_settings"),
 ]
