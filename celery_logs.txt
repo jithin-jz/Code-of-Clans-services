@@ -1,0 +1,81 @@
+ 
+/usr/local/lib/python3.12/site-packages/celery/platforms.py:829: SecurityWarning: You're running the worker with superuser privileges: this is
+ -------------- celery@d74a45f521e6 v5.4.0 (opalescent)
+absolutely not recommended!
+--- ***** ----- 
+-- ******* ---- Linux-5.15.167.4-microsoft-standard-WSL2-x86_64-with-glibc2.41 2026-02-14 19:36:35
+
+- *** --- * --- 
+Please specify a different user using the --uid option.
+- ** ---------- [config]
+
+- ** ---------- .> app:         project:0x7f6dd7d856d0
+- ** ---------- .> transport:   redis://redis:6379/0
+- ** ---------- .> results:     
+- *** --- * --- .> concurrency: 16 (prefork)
+-- ******* ---- .> task events: OFF (enable -E to monitor tasks in this worker)
+--- ***** ----- 
+ -------------- [queues]
+User information: uid=0 euid=0 gid=0 egid=0
+
+  warnings.warn(SecurityWarning(ROOT_DISCOURAGED.format(
+                .> celery           exchange=celery(direct) key=celery
+                
+
+[tasks]
+  . auth.tasks.send_otp_email_task
+  . auth.tasks.send_welcome_email_task
+  . challenges.tasks.update_leaderboard_cache
+[2026-02-14 19:36:48,433: WARNING/MainProcess] /usr/local/lib/python3.12/site-packages/celery/worker/consumer/consumer.py:508: CPendingDeprecationWarning: The broker_connection_retry configuration setting will no longer determine
+  . project.celery.debug_task
+
+whether broker connection retries are made during startup in Celery 6.0 and above.
+If you wish to retain the existing behavior for retrying connections on startup,
+you should set broker_connection_retry_on_startup to True.
+  warnings.warn(
+
+[2026-02-14 19:36:48,810: INFO/MainProcess] Connected to redis://redis:6379/0
+[2026-02-14 19:36:48,853: WARNING/MainProcess] /usr/local/lib/python3.12/site-packages/celery/worker/consumer/consumer.py:508: CPendingDeprecationWarning: The broker_connection_retry configuration setting will no longer determine
+whether broker connection retries are made during startup in Celery 6.0 and above.
+If you wish to retain the existing behavior for retrying connections on startup,
+you should set broker_connection_retry_on_startup to True.
+  warnings.warn(
+
+[2026-02-14 19:36:48,857: INFO/MainProcess] mingle: searching for neighbors
+[2026-02-14 19:36:50,104: INFO/MainProcess] mingle: all alone
+[2026-02-14 19:36:50,133: INFO/MainProcess] celery@d74a45f521e6 ready.
+[2026-02-14 19:37:31,892: INFO/MainProcess] Task challenges.tasks.update_leaderboard_cache[e10b6048-a76a-4576-9868-01ea9f18437e] received
+[2026-02-14 19:37:31,971: INFO/ForkPoolWorker-16] Starting leaderboard calculation task...
+[2026-02-14 19:37:32,303: INFO/ForkPoolWorker-16] Leaderboard updated successfully.
+[2026-02-14 19:37:32,350: INFO/ForkPoolWorker-16] Task challenges.tasks.update_leaderboard_cache[e10b6048-a76a-4576-9868-01ea9f18437e] succeeded in 0.402175477000128s: None
+[2026-02-14 19:37:57,010: INFO/MainProcess] Task auth.tasks.send_otp_email_task[3905347d-063c-43ff-8cfa-0455fe48319c] received
+[2026-02-14 19:37:58,835: INFO/ForkPoolWorker-16] Found credentials in environment variables.
+[2026-02-14 19:38:01,681: ERROR/ForkPoolWorker-16] Failed to send OTP email to jithinjzx@gmail.com
+Traceback (most recent call last):
+  File "/app/auth/emails.py", line 60, in send_otp_email
+    send_mail(
+  File "/usr/local/lib/python3.12/site-packages/django/core/mail/__init__.py", line 88, in send_mail
+    return mail.send()
+           ^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/django/core/mail/message.py", line 301, in send
+    return self.get_connection(fail_silently).send_messages([self])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/django_ses/__init__.py", line 181, in send_messages
+    else self.connection.send_raw_email(**kwargs))
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/botocore/client.py", line 602, in _api_call
+    return self._make_api_call(operation_name, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/botocore/context.py", line 123, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/botocore/client.py", line 1078, in _make_api_call
+    raise error_class(parsed_response, operation_name)
+botocore.errorfactory.MessageRejected: An error occurred (MessageRejected) when calling the SendRawEmail operation: Email address is not verified. The following identities failed the check in region AP-SOUTH-1: jithinjzx@gmail.com
+[2026-02-14 19:38:01,706: INFO/ForkPoolWorker-16] OTP email task completed for jithinjzx@gmail.com
+[2026-02-14 19:38:01,775: INFO/ForkPoolWorker-16] Task auth.tasks.send_otp_email_task[3905347d-063c-43ff-8cfa-0455fe48319c] succeeded in 4.750927233999391s: None
+[2026-02-14 19:38:28,674: INFO/MainProcess] Task auth.tasks.send_otp_email_task[39aca790-2602-4395-afe0-d0399e447c87] received
+[2026-02-14 19:38:28,686: INFO/ForkPoolWorker-16] Found credentials in environment variables.
+[2026-02-14 19:38:28,987: INFO/ForkPoolWorker-16] OTP email sent to jithinjzx@gmail.com
+[2026-02-14 19:38:28,987: INFO/ForkPoolWorker-16] OTP email task completed for jithinjzx@gmail.com
+[2026-02-14 19:38:29,006: INFO/ForkPoolWorker-16] Task auth.tasks.send_otp_email_task[39aca790-2602-4395-afe0-d0399e447c87] succeeded in 0.32947672799855354s: None

@@ -246,14 +246,11 @@ DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
 DISCORD_REDIRECT_URI = f"{FRONTEND_URL}/auth/discord/callback"
 
 
-# Email Configuration
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@codeofclans.com")
+# Email Configuration — AWS SES
+EMAIL_BACKEND = "django_ses.SESBackend"
+AWS_SES_REGION_NAME = os.getenv("AWS_SES_REGION", "ap-south-1")
+AWS_SES_REGION_ENDPOINT = f"email.{AWS_SES_REGION_NAME}.amazonaws.com"
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "jzdieheart@gmail.com")
 
 # Razorpay
 RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID")

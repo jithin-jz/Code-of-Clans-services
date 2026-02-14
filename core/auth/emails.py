@@ -28,7 +28,7 @@ def send_welcome_email(user):
         send_mail(
             subject=subject,
             message=plain_message,
-            from_email="Clash of Code <noreply@codeofclans.com>",
+            from_email=None,  # Uses DEFAULT_FROM_EMAIL from settings
             recipient_list=[user.email],
             html_message=html_message,
             fail_silently=False,
@@ -60,7 +60,7 @@ def send_otp_email(email, otp):
         send_mail(
             subject=subject,
             message=plain_message,
-            from_email="Clash of Code <noreply@codeofclans.com>",
+            from_email=None,  # Uses DEFAULT_FROM_EMAIL from settings
             recipient_list=[email],
             html_message=html_message,
             fail_silently=False,
