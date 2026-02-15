@@ -5,6 +5,7 @@ from .services import ChallengeService
 from .models import UserProgress
 from .certificate_service import CertificateService
 from .dynamo import dynamo_challenge_client
+from users.dynamo import dynamo_activity_client
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,10 @@ def track_progress_in_dynamo(sender, instance, created, **kwargs):
         status=instance.status,
         stars=instance.stars
     )
+    
+    # Log contribution for heatmap if completed
+    if instance.status == UserProgress.Status.COMPLETED:
+        dynamo_activity_client.log_activity(instance.user.id)
 
 # @receiver(post_save, sender=UserProfile)
 # def create_initial_challenge_signal(sender, instance, created, **kwargs):

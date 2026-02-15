@@ -18,7 +18,12 @@ from langchain_huggingface import HuggingFaceEmbeddings
 
 # Local imports
 from config import settings
-from prompts import HINT_GENERATION_SYSTEM_PROMPT, HINT_GENERATION_USER_TEMPLATE
+from prompts import (
+    HINT_GENERATION_SYSTEM_PROMPT, 
+    HINT_GENERATION_USER_TEMPLATE,
+    CODE_ANALYSIS_SYSTEM_PROMPT,
+    CODE_ANALYSIS_USER_TEMPLATE
+)
 
 # Configure Logging
 from logger_config import setup_logging
@@ -72,6 +77,11 @@ class HintRequest(BaseModel):
     language: str = "python"
     hint_level: int = 1  # 1: Vague, 2: Moderate, 3: Specific
     user_xp: int = 0
+
+class AnalysisRequest(BaseModel):
+    user_code: str
+    challenge_slug: str
+    language: str = "python"
 
 # --- Routes ---
 
@@ -179,3 +189,51 @@ async def generate_hint(
     except Exception as e:
          logger.error(f"LLM Error (All providers failed): {e}", exc_info=True)
          raise HTTPException(status_code=500, detail="Error generating hint")
+@app.post("/analyze")
+async def generate_analysis(
+    request: AnalysisRequest,
+    x_internal_api_key: Optional[str] = Header(None, alias="X-Internal-API-Key")
+):
+    logger.info(f"Received analysis request for challenge: {request.challenge_slug}")
+
+    if settings.INTERNAL_API_KEY and x_internal_api_key != settings.INTERNAL_API_KEY:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    # 1. Fetch Context
+    headers = {"X-Internal-API-Key": settings.INTERNAL_API_KEY}
+    try:
+        url = f"{settings.CORE_SERVICE_URL}/api/challenges/{request.challenge_slug}/context/"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=headers, timeout=5)
+            if response.status_code != 200:
+                 raise HTTPException(status_code=response.status_code, detail="Core service error")
+            context_data = response.json()
+    except Exception as e:
+        logger.error(f"Error connecting to Core: {e}")
+        raise HTTPException(status_code=503, detail="Core service unavailable")
+
+    challenge_title = context_data.get("challenge_title", context_data.get("title", ""))
+    challenge_description = context_data.get("challenge_description", context_data.get("description", ""))
+    test_code = context_data.get("test_code", "")
+
+    # 2. Prompt Construction
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", CODE_ANALYSIS_SYSTEM_PROMPT),
+        ("user", CODE_ANALYSIS_USER_TEMPLATE)
+    ])
+
+    # 3. Call LLM
+    try:
+        from llm_factory import LLMFactory
+        llm = LLMFactory.get_llm()
+        chain = prompt | llm | StrOutputParser()
+        analysis = await chain.ainvoke({
+            "challenge_title": challenge_title,
+            "challenge_description": challenge_description,
+            "test_code_summary": f"Validation logic present in hidden tests.",
+            "user_code": request.user_code
+        })
+        return {"analysis": analysis}
+    except Exception as e:
+        logger.error(f"LLM Error during analysis: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error generating analysis")

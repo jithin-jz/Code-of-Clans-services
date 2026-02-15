@@ -1,4 +1,4 @@
-# 🤖 Code of Clans - AI Service
+# 🤖 Clash of Code - AI Service
 
 The **AI Service** provides advanced intelligence and tutor features to the platform. Built with **FastAPI** and **LangChain**, it implements a **RAG (Retrieval-Augmented Generation)** architecture to help users solve coding challenges based on project-specific documentation.
 

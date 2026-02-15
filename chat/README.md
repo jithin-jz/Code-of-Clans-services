@@ -1,4 +1,4 @@
-# 💬 Code of Clans - Chat Service
+# 💬 Clash of Code - Chat Service
 
 The **Chat Service** enables real-time communication between users on the platform. It leverages **FastAPI's WebSocket** support and **Redis Pub/Sub** to provide a scalable, low-latency messaging experience.
 

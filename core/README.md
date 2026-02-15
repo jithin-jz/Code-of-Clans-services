@@ -1,6 +1,6 @@
-# 🏰 Code of Clans - Core Service
+# 🏰 Clash of Code - Core Service
 
-The **Core Service** is the backbone of the Code of Clans platform. Built with **Django** and **Django REST Framework (DRF)**, it manages user authentication, challenge logic, payments, rewards, and notification systems.
+The **Core Service** is the backbone of the Clash of Code platform. Built with **Django** and **Django REST Framework (DRF)**, it manages user authentication, challenge logic, payments, rewards, and notification systems.
 
 ## 🚀 Tech Stack
 

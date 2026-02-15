@@ -18,14 +18,20 @@ class FCMTokenViewSet(viewsets.ModelViewSet):
         if not token:
             return Response({"error": "Token is required"}, status=status.HTTP_400_BAD_REQUEST)
         
-        fcm_token, created = FCMToken.objects.update_or_create(
-            user=request.user,
-            device_id=device_id,
-            defaults={'token': token}
-        )
-        
-        serializer = self.get_serializer(fcm_token)
-        return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+        try:
+            # Use token as the primary lookup to avoid IntegrityError if device_id changes
+            fcm_token, created = FCMToken.objects.update_or_create(
+                token=token,
+                defaults={
+                    'user': request.user,
+                    'device_id': device_id
+                }
+            )
+            
+            serializer = self.get_serializer(fcm_token)
+            return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class NotificationViewSet(mixins.RetrieveModelMixin,

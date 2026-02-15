@@ -340,11 +340,16 @@ async def chat_ws(ws: WebSocket, room: str):
                 await session.commit()
 
             # Save to DynamoDB for high-speed history retrieval
-            await dynamo_client.save_message(
-                room_id=room,
-                sender=username,
-                message=incoming.message
-            )
+            try:
+                await dynamo_client.save_message(
+                    room_id=room,
+                    sender=username,
+                    message=incoming.message,
+                    user_id=user_id
+                )
+            except Exception as e:
+                logger.error(f"Failed to save message to DynamoDB: {e}")
+                # We continue anyway to ensure real-time broadcast works
 
             # Publish
             await redis_client.publish(

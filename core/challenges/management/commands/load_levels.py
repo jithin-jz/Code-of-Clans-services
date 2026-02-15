@@ -10,9 +10,21 @@ from challenges.levels import LEVELS
 
 
 class Command(BaseCommand):
-    help = 'Load 53 levels from levels.py into the database'
+    help = 'Load levels from levels.py into the database'
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--clear',
+            action='store_true',
+            help='Clear existing global challenges before loading',
+        )
 
     def handle(self, *args, **options):
+        if options['clear']:
+            self.stdout.write(self.style.WARNING('Clearing existing global challenges...'))
+            deleted = Challenge.objects.filter(created_for_user__isnull=True).delete()
+            self.stdout.write(self.style.SUCCESS(f'  ✓ Deleted {deleted[0]} challenges'))
+
         self.stdout.write(self.style.HTTP_INFO(f'Loading {len(LEVELS)} levels...'))
         
         created_count = 0

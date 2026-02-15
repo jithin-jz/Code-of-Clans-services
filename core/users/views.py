@@ -18,6 +18,7 @@ from .serializers import (
 
 
 from xpoint.services import XPService
+from .dynamo import dynamo_activity_client
 
 
 from django.utils.decorators import method_decorator
@@ -376,3 +377,25 @@ class SuggestedUsersView(APIView):
 
         return Response(data, status=status.HTTP_200_OK)
 
+class ContributionHistoryView(APIView):
+    """View to get contribution history for the contribution graph."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, username):
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        items = dynamo_activity_client.get_contribution_history(user.id)
+        
+        # Format for frontend (usually expects a map or list of {date, count})
+        formatted_data = [
+            {"date": item["date"], "count": int(item["contribution_count"])}
+            for item in items
+        ]
+
+        return Response(formatted_data, status=status.HTTP_200_OK)

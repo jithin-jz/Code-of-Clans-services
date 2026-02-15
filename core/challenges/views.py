@@ -290,6 +290,66 @@ class ChallengeViewSet(viewsets.ModelViewSet):
             )
 
     @extend_schema(
+        request=inline_serializer(
+            name="AIAnalysisProxyRequest",
+            fields={
+                "user_code": serializers.CharField(),
+            }
+        ),
+        responses={
+            200: OpenApiTypes.OBJECT,
+            403: OpenApiTypes.OBJECT,
+        },
+        description="Request an AI code analysis via Core Gateway.",
+    )
+    @decorators.action(detail=True, methods=["post"], url_path="ai-analyze")
+    def ai_analyze(self, request, slug=None):
+        """
+        Proxies the analysis request to the AI service.
+        """
+        challenge = self.get_object()
+        user = request.user
+        
+        # 2. Proxy to AI Service
+        import os
+        import requests
+        
+        ai_url = os.getenv("AI_SERVICE_URL", "http://ai:8002")
+        internal_key = os.getenv("INTERNAL_API_KEY")
+        
+        payload = {
+            "user_code": request.data.get("user_code", ""),
+            "challenge_slug": challenge.slug,
+        }
+        
+        headers = {
+            "X-Internal-API-Key": internal_key,
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            resp = requests.post(
+                f"{ai_url}/analyze",
+                json=payload,
+                headers=headers,
+                timeout=60 # Analysis might take longer
+            )
+            
+            if resp.status_code == 200:
+                return Response(resp.json())
+            else:
+                return Response(
+                    {"error": "AI Service Error", "details": resp.text},
+                    status=resp.status_code
+                )
+        except requests.exceptions.RequestException as e:
+            logger.error(f"AI Connection Error: {e}")
+            return Response(
+                {"error": "AI Service Unavailable"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+    @extend_schema(
         request=None,
         responses={
             200: inline_serializer(
@@ -388,7 +448,7 @@ class LeaderboardView(APIView):
             )
             .select_related("profile")
             .filter(is_active=True, is_staff=False, is_superuser=False)
-            .order_by("-completed_count", "-profile__xp")[:100]
+            .order_by("-profile__xp", "-completed_count")[:100]
         )
 
         data = []
@@ -411,7 +471,7 @@ class LeaderboardView(APIView):
             )
 
         # Cache fallback result
-        cache.set("leaderboard_data", data, timeout=300)
+        cache.set("leaderboard_data", data, timeout=30)
 
         return Response(data)
 
