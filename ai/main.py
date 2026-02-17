@@ -18,7 +18,9 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from config import settings
 from prompts import (
     HINT_GENERATION_SYSTEM_PROMPT, 
-    HINT_GENERATION_USER_TEMPLATE
+    HINT_GENERATION_USER_TEMPLATE,
+    CODE_REVIEW_SYSTEM_PROMPT,
+    CODE_REVIEW_USER_TEMPLATE,
 )
 
 # Configure Logging
@@ -74,6 +76,49 @@ class HintRequest(BaseModel):
     hint_level: int = 1  # 1: Vague, 2: Moderate, 3: Specific
     user_xp: int = 0
 
+class AnalyzeRequest(BaseModel):
+    user_code: str
+    challenge_slug: str
+    language: str = "python"
+
+
+async def fetch_challenge_context(challenge_slug: str):
+    headers = {"X-Internal-API-Key": settings.INTERNAL_API_KEY}
+    try:
+        url = f"{settings.CORE_SERVICE_URL}/api/challenges/{challenge_slug}/context/"
+        logger.info(f"Fetching context from: {url}")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=headers, timeout=5)
+            if response.status_code != 200:
+                logger.error(f"Core service error: {response.status_code} - {response.text}")
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Core service returned {response.status_code}",
+                )
+            return response.json()
+    except httpx.RequestError as e:
+        logger.error(f"Error connecting to Core Service: {e}")
+        raise HTTPException(status_code=503, detail="Core service unavailable")
+
+
+async def get_rag_context(challenge_description: str, user_code: str, challenge_slug: str):
+    logger.info("Performing similarity search for RAG...")
+    similar_docs = []
+    try:
+        query = f"Challenge: {challenge_description}\n\nUser Code: {user_code}"
+        loop = asyncio.get_running_loop()
+        results = await loop.run_in_executor(
+            None, lambda: vector_db.similarity_search(query, k=2)
+        )
+        similar_docs = [
+            doc.page_content
+            for doc in results
+            if doc.metadata.get("slug") != challenge_slug
+        ]
+    except Exception as e:
+        logger.warning(f"RAG Search failed: {e}. Proceeding without extra context.")
+    return "\n\n".join(similar_docs) if similar_docs else "No similar patterns found."
+
 
 # --- Routes ---
 
@@ -98,47 +143,21 @@ async def generate_hint(
         raise HTTPException(status_code=500, detail="LLM API Key not configured")
 
     # 1. Fetch Challenge Context from Core Service
-    headers = {"X-Internal-API-Key": settings.INTERNAL_API_KEY}
-    try:
-        url = f"{settings.CORE_SERVICE_URL}/api/challenges/{request.challenge_slug}/context/"
-        logger.info(f"Fetching context from: {url}")
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, headers=headers, timeout=5)
-            
-            if response.status_code != 200:
-                 logger.error(f"Core service error: {response.status_code} - {response.text}")
-                 raise HTTPException(status_code=response.status_code, detail=f"Core service returned {response.status_code}")
-            
-            context_data = response.json()
-        logger.info("Context fetched successfully")
-    except httpx.RequestError as e:
-        logger.error(f"Error connecting to Core Service: {e}")
-        raise HTTPException(status_code=503, detail="Core service unavailable")
+    context_data = await fetch_challenge_context(request.challenge_slug)
 
     # 2. Extract Data
     challenge_title = context_data.get("challenge_title", context_data.get("title", ""))
     challenge_description = context_data.get("challenge_description", context_data.get("description", ""))
-    test_code = context_data.get("test_code", "")
+    test_code = context_data.get("test_code", "")  # kept for parity/future use
     
     # 3. RAG: Search for similar challenges
-    # Chroma/LangChain vectorstore operations are currently often synchronous or wrapped.
-    # We will assume they are fast enough for now or run them in a thread if needed.
-    # ideally: await vector_db.asimilarity_search(...)
-    logger.info("Performing similarity search for RAG...")
-    similar_docs = []
-    try:
-        query = f"Challenge: {challenge_description}\n\nUser Code: {request.user_code}"
-        # wrapping in asyncio.to_thread to prevent blocking the event loop
-        loop = asyncio.get_running_loop()
-        results = await loop.run_in_executor(None, lambda: vector_db.similarity_search(query, k=2))
-        similar_docs = [doc.page_content for doc in results if doc.metadata.get("slug") != request.challenge_slug]
-    except Exception as e:
-        logger.warning(f"RAG Search failed: {e}. Proceeding without extra context.")
+    rag_context = await get_rag_context(
+        challenge_description=challenge_description,
+        user_code=request.user_code,
+        challenge_slug=request.challenge_slug,
+    )
 
     # 4. Construct Prompt
-    rag_context = "\n\n".join(similar_docs) if similar_docs else "No similar patterns found."
-    
     prompt = ChatPromptTemplate.from_messages([
         ("system", HINT_GENERATION_SYSTEM_PROMPT),
         ("user", HINT_GENERATION_USER_TEMPLATE)
@@ -179,3 +198,68 @@ async def generate_hint(
     except Exception as e:
          logger.error(f"LLM Error (All providers failed): {e}", exc_info=True)
          raise HTTPException(status_code=500, detail="Error generating hint")
+
+
+@app.post("/analyze")
+async def analyze_code(
+    request: AnalyzeRequest,
+    x_internal_api_key: Optional[str] = Header(None, alias="X-Internal-API-Key"),
+):
+    logger.info(f"Received analyze request for challenge: {request.challenge_slug}")
+
+    if x_internal_api_key != settings.INTERNAL_API_KEY:
+        logger.warning(f"Unauthorized analyze request. Key: {x_internal_api_key}")
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    if not settings.GROQ_API_KEY:
+        logger.error("No LLM API Keys configured")
+        raise HTTPException(status_code=500, detail="LLM API Key not configured")
+
+    context_data = await fetch_challenge_context(request.challenge_slug)
+    challenge_title = context_data.get("challenge_title", context_data.get("title", ""))
+    challenge_description = context_data.get("challenge_description", context_data.get("description", ""))
+    initial_code = context_data.get("initial_code", "")
+    test_code = context_data.get("test_code", "")
+    rag_context = await get_rag_context(
+        challenge_description=challenge_description,
+        user_code=request.user_code,
+        challenge_slug=request.challenge_slug,
+    )
+
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", CODE_REVIEW_SYSTEM_PROMPT),
+        ("user", CODE_REVIEW_USER_TEMPLATE),
+    ])
+
+    try:
+        from llm_factory import LLMFactory
+
+        try:
+            llm = LLMFactory.get_llm()
+            chain = prompt | llm | StrOutputParser()
+            review = await chain.ainvoke({
+                "challenge_title": challenge_title,
+                "challenge_description": challenge_description,
+                "initial_code": initial_code,
+                "user_code": request.user_code,
+                "test_code": test_code,
+                "rag_context": rag_context,
+            })
+        except Exception as e:
+            logger.warning(f"Primary LLM failed on analyze: {e}. Attempting fallback...")
+            llm = LLMFactory.get_fallback_llm()
+            chain = prompt | llm | StrOutputParser()
+            review = await chain.ainvoke({
+                "challenge_title": challenge_title,
+                "challenge_description": challenge_description,
+                "initial_code": initial_code,
+                "user_code": request.user_code,
+                "test_code": test_code,
+                "rag_context": rag_context,
+            })
+
+        logger.info("AI code review generated successfully")
+        return {"review": review}
+    except Exception as e:
+        logger.error(f"LLM Error on analyze (All providers failed): {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error generating analysis")
