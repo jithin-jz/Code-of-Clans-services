@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Challenge, UserProgress, UserCertificate
+from .models import Challenge, UserProgress
+from certificates.serializers import UserCertificateSerializer
 
 
 class ChallengeSerializer(serializers.ModelSerializer):
@@ -30,13 +31,3 @@ class UserProgressSerializer(serializers.ModelSerializer):
         model = UserProgress
         fields = ["challenge_id", "status", "stars", "completed_at"]
 
-
-class UserCertificateSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source='user.username', read_only=True)
-    verification_url = serializers.CharField(read_only=True)
-    
-    class Meta:
-        model = UserCertificate
-        fields = ['id', 'certificate_id', 'username', 'issued_date', 'is_valid', 
-                  'completion_count', 'verification_url']
-        read_only_fields = ['certificate_id', 'issued_date']

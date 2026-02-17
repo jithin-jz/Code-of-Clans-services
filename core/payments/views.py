@@ -17,7 +17,11 @@ except Exception:  # pragma: no cover - optional runtime dependency
 def _get_razorpay_client():
     if razorpay is None:
         raise RuntimeError("Razorpay SDK is not available")
-    return razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+    if not settings.RAZORPAY_KEY_ID or not settings.RAZORPAY_KEY_SECRET:
+        raise RuntimeError("Razorpay keys are not configured on the server")
+    return razorpay.Client(
+        auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET)
+    )
 
 
 class CreateOrderView(views.APIView):
@@ -32,36 +36,36 @@ class CreateOrderView(views.APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         amount_inr = serializer.validated_data["amount"]
+        xp_packages_map = {
+            49: 50,
+            99: 100,
+            199: 200,
+            249: 250,
+            499: 500,
+            749: 800,
+            999: 1000,
+            1999: 2500,
+        }
+
+        if amount_inr not in xp_packages_map:
+            return Response(
+                {"error": "Invalid package amount"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Amount in Paise
         data = {
             "amount": amount_inr * 100,
             "currency": "INR",
-            "notes": {"user_id": request.user.id},
+            "receipt": f"coc_{request.user.id}_{amount_inr}",
+            # Razorpay expects notes values as strings.
+            "notes": {"user_id": str(request.user.id)},
         }
 
         try:
             client = _get_razorpay_client()
             order = client.order.create(data=data)
-
-            XP_PACKAGES_MAP = {
-                49: 50,
-                99: 100,
-                199: 200,
-                249: 250,
-                499: 500,
-                749: 800,
-                999: 1000,
-                1999: 2500,
-            }
-
-            if amount_inr not in XP_PACKAGES_MAP:
-                return Response(
-                    {"error": "Invalid package amount"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            xp_to_credit = XP_PACKAGES_MAP[amount_inr]
+            xp_to_credit = xp_packages_map[amount_inr]
 
             Payment.objects.create(
                 user=request.user,
@@ -82,7 +86,25 @@ class CreateOrderView(views.APIView):
             )
 
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            if "Razorpay SDK is not available" in str(e):
+                return Response(
+                    {"error": "Payment service is unavailable (Razorpay SDK missing)"},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            if "Razorpay keys are not configured" in str(e):
+                return Response(
+                    {"error": "Payment service is unavailable (Razorpay keys missing)"},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            if razorpay and isinstance(e, razorpay.errors.BadRequestError):
+                return Response(
+                    {"error": "Payment provider rejected the order request"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return Response(
+                {"error": "Unable to create payment order"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class VerifyPaymentView(views.APIView):

@@ -78,6 +78,7 @@ class GitHubAuthURLView(APIView):
     """
 
     permission_classes = [AllowAny]
+    throttle_classes = []
     serializer_class = OAuthURLSerializer
 
     def get(self, request):
@@ -127,6 +128,7 @@ class GoogleAuthURLView(APIView):
     """Return the Google OAuth authorization URL."""
 
     permission_classes = [AllowAny]
+    throttle_classes = []
     serializer_class = OAuthURLSerializer
 
     def get(self, request):

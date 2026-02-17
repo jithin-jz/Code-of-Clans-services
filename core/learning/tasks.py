@@ -1,24 +1,24 @@
-from celery import shared_task
-from django.core.cache import cache
-from django.utils import timezone
-from django.db.models import Count, Q
-from django.contrib.auth import get_user_model
-from users.models import UserProfile
 import logging
 
+from celery import shared_task
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.db.models import Count, Q
+
+from users.models import UserProfile
+
 logger = logging.getLogger(__name__)
+
 
 @shared_task
 def update_leaderboard_cache():
     """
     Periodic task to calculate and cache the leaderboard.
-    This runs every X minutes (configured in beat schedule) to reduce DB load.
     """
     User = get_user_model()
     logger.info("Starting leaderboard calculation task...")
 
     try:
-        # Aggregation Logic (Copied from LeaderboardView)
         users = (
             User.objects.annotate(
                 completed_count=Count(
@@ -50,9 +50,9 @@ def update_leaderboard_cache():
                 }
             )
 
-        # Cache the result for 15 minutes (or however long until next run)
         cache.set("leaderboard_data", data, timeout=None)
         logger.info("Leaderboard updated successfully.")
 
     except Exception as e:
-        logger.exception(f"Leaderboard task failed: {str(e)}")
+        logger.exception("Leaderboard task failed: %s", str(e))
+

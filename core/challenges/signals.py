@@ -1,9 +1,7 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from users.models import UserProfile
-from .services import ChallengeService
 from .models import UserProgress
-from .certificate_service import CertificateService
+from certificates.services import CertificateService
 from .dynamo import dynamo_challenge_client
 from users.dynamo import dynamo_activity_client
 import logging

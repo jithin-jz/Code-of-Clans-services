@@ -1,6 +1,7 @@
 from rest_framework import viewsets, permissions, status, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from auth.throttles import NotificationRateThrottle
 from .models import Notification, FCMToken
 from .serializers import NotificationSerializer, FCMTokenSerializer
 
@@ -40,6 +41,7 @@ class NotificationViewSet(mixins.RetrieveModelMixin,
                           viewsets.GenericViewSet):
     serializer_class = NotificationSerializer
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [NotificationRateThrottle]
 
     def get_queryset(self):
         return Notification.objects.filter(recipient=self.request.user).order_by('-created_at')

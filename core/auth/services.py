@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 import requests
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.core.exceptions import ValidationError
@@ -20,6 +21,7 @@ from .utils import (
     get_google_user,
 )
 from .tasks import send_welcome_email_task, send_otp_email_task
+from .emails import send_otp_email
 
 logger = logging.getLogger(__name__)
 
@@ -245,7 +247,19 @@ class AuthService:
         otp_code = generate_otp_code()
 
         EmailOTP.objects.create(email=email, otp=otp_code)
-        send_otp_email_task.delay(email, otp_code)
+
+        if settings.OTP_EMAIL_ASYNC:
+            try:
+                send_otp_email_task.delay(email, otp_code)
+            except Exception:
+                logger.exception(
+                    "Failed to enqueue OTP email task. Falling back to sync send for %s",
+                    email,
+                )
+                send_otp_email(email, otp_code)
+        else:
+            send_otp_email(email, otp_code)
+
         cache.set(request_key, request_count + 1, timeout=AuthService.OTP_REQUEST_WINDOW_SECONDS)
 
         return True

@@ -18,7 +18,8 @@ urlpatterns = [
     path("api/payments/", include("payments.urls")),
     path("api/store/", include("store.urls")),
     path("api/admin/", include("administration.urls")),
-    path("api/", include("challenges.urls")),
+    path("api/", include("learning.urls")),
+    path("api/", include("certificates.urls")),
     path("api/posts/", include("posts.urls")),
     path("api/notifications/", include("notifications.urls")),
     # Swagger Documentation routes

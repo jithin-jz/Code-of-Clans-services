@@ -81,3 +81,24 @@ class BurstRateThrottle(SimpleRateThrottle):
             "scope": self.scope,
             "ident": ident
         }
+
+
+class NotificationRateThrottle(SimpleRateThrottle):
+    """
+    Throttle for notifications feed polling.
+    Kept higher than generic user throttle to support periodic refresh.
+
+    Rate: Configured in settings.DEFAULT_THROTTLE_RATES['notifications']
+    """
+    scope = "notifications"
+
+    def get_cache_key(self, request, view):
+        if request.user.is_authenticated:
+            ident = request.user.pk
+        else:
+            ident = self.get_ident(request)
+
+        return self.cache_format % {
+            "scope": self.scope,
+            "ident": ident
+        }

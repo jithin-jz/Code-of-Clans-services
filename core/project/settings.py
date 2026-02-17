@@ -49,6 +49,8 @@ INSTALLED_APPS = [
     "payments",
     "store",
     "challenges",
+    "learning",
+    "certificates",
     "django_celery_beat",
     "django_celery_results",
     "administration",
@@ -225,13 +227,14 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.UserRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "20/minute",       # General anonymous limit
-        "user": "100/minute",      # General authenticated user limit
-        "otp": "5/minute",         # Strict limit for OTP requests (SMS cost)
-        "auth": "10/minute",       # Login/register attempts (brute force protection)
-        "store": "30/minute",      # Store/purchase operations
-        "sensitive": "5/minute",   # Password reset, email change
-        "burst": "10/second",      # Short burst protection
+        "anon": os.getenv("THROTTLE_ANON_RATE", "20/minute"),       # General anonymous limit
+        "user": os.getenv("THROTTLE_USER_RATE", "100/minute"),      # General authenticated user limit
+        "otp": os.getenv("THROTTLE_OTP_RATE", "5/minute"),          # Strict limit for OTP requests (SMS cost)
+        "auth": os.getenv("THROTTLE_AUTH_RATE", "10/minute"),       # Login/register attempts (brute force protection)
+        "store": os.getenv("THROTTLE_STORE_RATE", "30/minute"),     # Store/purchase operations
+        "notifications": os.getenv("THROTTLE_NOTIFICATIONS_RATE", "180/minute"),  # Notification polling/read operations
+        "sensitive": os.getenv("THROTTLE_SENSITIVE_RATE", "5/minute"),   # Password reset, email change
+        "burst": os.getenv("THROTTLE_BURST_RATE", "10/second"),      # Short burst protection
     },
 }
 
@@ -270,6 +273,7 @@ EMAIL_BACKEND = "django_ses.SESBackend"
 AWS_SES_REGION_NAME = os.getenv("AWS_SES_REGION", "ap-south-1")
 AWS_SES_REGION_ENDPOINT = f"email.{AWS_SES_REGION_NAME}.amazonaws.com"
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "jzdieheart@gmail.com")
+OTP_EMAIL_ASYNC = os.getenv("OTP_EMAIL_ASYNC", "false" if DEBUG else "true").lower() == "true"
 
 # Razorpay
 RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID")
@@ -289,7 +293,7 @@ CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
 CELERY_BEAT_SCHEDULE = {
     "update-leaderboard-every-5-minutes": {
-        "task": "challenges.tasks.update_leaderboard_cache",
+        "task": "learning.tasks.update_leaderboard_cache",
         "schedule": 300.0,  # 5 minutes
     },
 }

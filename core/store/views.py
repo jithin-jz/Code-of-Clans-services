@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status, generics
+from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -7,7 +7,7 @@ from .models import StoreItem, Purchase
 from .serializers import StoreItemSerializer
 from xpoint.services import XPService
 
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAdminUser
 from auth.throttles import StoreRateThrottle
 
 import os
@@ -15,7 +15,7 @@ from django.conf import settings
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes, inline_serializer
+from drf_spectacular.utils import extend_schema, OpenApiTypes, inline_serializer
 from rest_framework import serializers
 
 from django.utils.decorators import method_decorator
@@ -24,8 +24,13 @@ from django.views.decorators.cache import never_cache
 
 @method_decorator(never_cache, name="dispatch")
 class StoreItemViewSet(viewsets.ModelViewSet):
-    queryset = StoreItem.objects.filter(is_active=True)
     serializer_class = StoreItemSerializer
+
+    def get_queryset(self):
+        # Admin should be able to manage all items, including inactive.
+        if self.request.user.is_staff:
+            return StoreItem.objects.all().order_by("-created_at")
+        return StoreItem.objects.filter(is_active=True).order_by("-created_at")
 
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy"]:
@@ -55,7 +60,6 @@ class PurchaseItemView(APIView):
     def post(self, request, pk=None):
         item = get_object_or_404(StoreItem, pk=pk, is_active=True)
         user = request.user
-        profile = user.profile
 
         # Check if already purchased (if we enforce unique)
         if Purchase.objects.filter(user=user, item=item).exists():
@@ -64,14 +68,16 @@ class PurchaseItemView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if profile.xp < item.cost:
+        if user.profile.xp < item.cost:
             return Response(
-                {"error": f"Insufficient XP. Need {item.cost - profile.xp} more."},
+                {
+                    "error": f"Insufficient XP. Need {item.cost - user.profile.xp} more."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Process Transaction using XPService
-        XPService.add_xp(
+        remaining_xp = XPService.add_xp(
             user,
             -item.cost,
             source="store_purchase",
@@ -84,9 +90,46 @@ class PurchaseItemView(APIView):
             {
                 "status": "success",
                 "message": f"Purchased {item.name}",
-                "remaining_xp": profile.xp,
+                "remaining_xp": remaining_xp,
+                "item": StoreItemSerializer(item, context={"request": request}).data,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+class PurchasedItemsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=None,
+        responses={200: OpenApiTypes.OBJECT},
+        description="Get purchased items and currently equipped cosmetics.",
+    )
+    def get(self, request):
+        purchases = (
+            Purchase.objects.select_related("item")
+            .filter(user=request.user, item__is_active=True)
+            .order_by("-purchased_at")
+        )
+        items = [p.item for p in purchases]
+        serialized_items = StoreItemSerializer(
+            items, many=True, context={"request": request}
+        ).data
+
+        profile = request.user.profile
+        equipped_items = {
+            "theme": profile.active_theme,
+            "font": profile.active_font,
+            "effect": profile.active_effect,
+            "victory": profile.active_victory,
+        }
+
+        return Response(
+            {
+                "purchased_items": serialized_items,
+                "equipped_items": equipped_items,
+            },
+            status=status.HTTP_200_OK,
         )
 
 
@@ -282,4 +325,3 @@ class UnequipItemView(APIView):
             {"status": "success", "message": f"Unequipped {category}"},
             status=status.HTTP_200_OK,
         )
-

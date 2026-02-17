@@ -17,6 +17,7 @@ class JWTAuthentication(authentication.BaseAuthentication):
         auth_header = request.headers.get("Authorization")
 
         token = None
+        token_source = None
         if auth_header:
             # 2. Extract the prefix and the token string
             try:
@@ -24,6 +25,8 @@ class JWTAuthentication(authentication.BaseAuthentication):
                 # Only process headers starting with 'bearer'
                 if prefix.lower() != "bearer":
                     token = None
+                else:
+                    token_source = "header"
             except ValueError:
                 # Handle malformed headers (e.g., header missing a space)
                 token = None
@@ -31,24 +34,33 @@ class JWTAuthentication(authentication.BaseAuthentication):
         # Fallback to HttpOnly cookie
         if not token:
             token = request.COOKIES.get(settings.JWT_ACCESS_COOKIE_NAME)
+            if token:
+                token_source = "cookie"
         if not token:
             return None
 
         # 3. Decode and validate the token signature and expiration
         payload = decode_token(token)
 
-        # If decoding fails (invalid signature or expired), raise 401 Unauthorized
+        # For invalid/expired cookie tokens, treat as anonymous so AllowAny endpoints
+        # (like OTP request) are not blocked by stale browser cookies.
         if not payload:
+            if token_source == "cookie":
+                return None
             raise exceptions.AuthenticationFailed("Invalid or expired token")
 
         # 4. Enforce token usage policies (e.g., must be an 'access' token)
         if payload.get("type") != "access":
+            if token_source == "cookie":
+                return None
             raise exceptions.AuthenticationFailed("Invalid token type")
 
         # 5. Identify and validate the user associated with the token
         try:
             user = User.objects.get(id=payload["user_id"])
         except User.DoesNotExist:
+            if token_source == "cookie":
+                return None
             raise exceptions.AuthenticationFailed("User not found")
 
         # 6. Ensure the user account is still permitted to access the system
@@ -58,6 +70,9 @@ class JWTAuthentication(authentication.BaseAuthentication):
         # 7. Return the (user, auth) tuple required by DRF
         # This sets request.user and request.auth in the view
         return (user, token)
+
+    def authenticate_header(self, request):
+        return "Bearer"
 
 
 # JWT Authentication for OpenAPI/Swagger
