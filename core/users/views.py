@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.cache import cache
+from django.db import transaction
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -294,7 +295,7 @@ class RedeemReferralView(APIView):
     serializer_class = RedeemReferralSerializer
 
     def post(self, request):
-        code = request.data.get("code")
+        code = (request.data.get("code") or "").strip().upper()
 
         if not code:
             return Response(
@@ -302,43 +303,59 @@ class RedeemReferralView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            profile = request.user.profile
-        except UserProfile.DoesNotExist:
-            return Response(
-                {"error": "User profile not found"}, status=status.HTTP_404_NOT_FOUND
+        with transaction.atomic():
+            try:
+                profile = UserProfile.objects.select_for_update().get(user=request.user)
+            except UserProfile.DoesNotExist:
+                return Response(
+                    {"error": "User profile not found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            if profile.referred_by:
+                return Response(
+                    {"error": "You have already redeemed a referral code"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if profile.referral_code == code:
+                return Response(
+                    {"error": "Cannot redeem your own referral code"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                referrer_profile = UserProfile.objects.select_related("user").get(
+                    referral_code=code
+                )
+            except UserProfile.DoesNotExist:
+                return Response(
+                    {"error": "Invalid referral code"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            profile.referred_by = referrer_profile.user
+            profile.save(update_fields=["referred_by", "updated_at"])
+
+            new_total_xp = XPService.add_xp(
+                request.user, 100, source=XPService.SOURCE_REFERRAL
+            )
+            referrer_new_total_xp = XPService.add_xp(
+                referrer_profile.user, 100, source=XPService.SOURCE_REFERRAL
             )
 
-        if profile.referred_by:
-            return Response(
-                {"error": "You have already redeemed a referral code"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if profile.referral_code == code:
-            return Response(
-                {"error": "Cannot redeem your own referral code"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            referrer_profile = UserProfile.objects.get(referral_code=code)
-        except UserProfile.DoesNotExist:
-            return Response(
-                {"error": "Invalid referral code"}, status=status.HTTP_404_NOT_FOUND
-            )
-
-        # Update user profile
-        profile.referred_by = referrer_profile.user
-        XPService.add_xp(request.user, 100, source=XPService.SOURCE_REFERRAL)
-        profile.refresh_from_db()  # Refresh to get the updated XP
-        profile.save()  # save the referred_by change
+            # Profile detail is cached; invalidate both users so XP updates are visible immediately.
+            cache.delete(f"profile:{request.user.username}")
+            cache.delete(f"profile:{referrer_profile.user.username}")
 
         return Response(
             {
                 "message": "Referral code redeemed successfully",
                 "xp_awarded": 100,
-                "new_total_xp": profile.xp,
+                "redeemer_xp_awarded": 100,
+                "referrer_xp_awarded": 100,
+                "new_total_xp": new_total_xp,
+                "referrer_new_total_xp": referrer_new_total_xp,
             },
             status=status.HTTP_200_OK,
         )
