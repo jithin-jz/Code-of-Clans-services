@@ -1,7 +1,9 @@
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.contrib.auth.validators import UnicodeUsernameValidator
+from django.core.exceptions import ValidationError
 from django.core.cache import cache
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.db.models import Count
 from django.db.models.functions import TruncDate
 from rest_framework import status
@@ -24,6 +26,28 @@ from challenges.models import UserProgress
 
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
+
+
+def _set_auth_cookies(response, access_token: str, refresh_token: str | None = None):
+    response.set_cookie(
+        settings.JWT_ACCESS_COOKIE_NAME,
+        access_token,
+        httponly=True,
+        secure=settings.JWT_COOKIE_SECURE,
+        samesite=settings.JWT_COOKIE_SAMESITE,
+        max_age=settings.JWT_ACCESS_TOKEN_LIFETIME,
+        path="/",
+    )
+    if refresh_token:
+        response.set_cookie(
+            settings.JWT_REFRESH_COOKIE_NAME,
+            refresh_token,
+            httponly=True,
+            secure=settings.JWT_COOKIE_SECURE,
+            samesite=settings.JWT_COOKIE_SAMESITE,
+            max_age=settings.JWT_REFRESH_TOKEN_LIFETIME,
+            path="/",
+        )
 
 
 @method_decorator(never_cache, name="dispatch")
@@ -60,33 +84,67 @@ class ProfileUpdateView(APIView):
     def patch(self, request):
         user = request.user
         data = request.data
+        old_username = user.username
+        username_validator = UnicodeUsernameValidator()
 
-        # 1. Update Core User Model Fields
+        # 1. Validate username first so we can return clean API errors.
         if "username" in data:
-            user.username = data["username"]
-        if "first_name" in data:
-            user.first_name = data["first_name"]
-        if "last_name" in data:
-            user.last_name = data["last_name"]
-        user.save()
+            requested_username = str(data.get("username", "")).strip()
+            if not requested_username:
+                return Response(
+                    {"error": "Username cannot be empty."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
-        # 2. Update Extended UserProfile Fields
+            try:
+                username_validator(requested_username)
+            except ValidationError:
+                return Response(
+                    {
+                        "error": "Username can only contain letters, numbers, and @/./+/-/_ characters."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            username_taken = User.objects.filter(
+                username__iexact=requested_username
+            ).exclude(pk=user.pk).exists()
+            if username_taken:
+                return Response(
+                    {"error": "Username is already taken."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            user.username = requested_username
+
+        if "first_name" in data:
+            user.first_name = str(data.get("first_name", "")).strip()
+        if "last_name" in data:
+            user.last_name = str(data.get("last_name", "")).strip()
+
         profile = user.profile
         if "bio" in data:
-            profile.bio = data["bio"]
+            profile.bio = str(data.get("bio", ""))
 
-        # 3. Handle File Uploads (to Supabase Storage)
-        # 3. Handle File Uploads (Native Django Storage)
         if "avatar" in request.FILES:
             profile.avatar = request.FILES["avatar"]
 
         if "banner" in request.FILES:
             profile.banner = request.FILES["banner"]
 
-        profile.save()
+        try:
+            with transaction.atomic():
+                user.save()
+                profile.save()
+        except IntegrityError:
+            return Response(
+                {"error": "Username is already taken."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Invalidate profile cache
-        cache.delete(f'profile:{user.username}')
+        cache.delete(f"profile:{old_username}")
+        cache.delete(f"profile:{user.username}")
 
         # Generate new tokens to reflect updated claims (username/avatar)
         from auth.utils import generate_tokens
@@ -97,10 +155,13 @@ class ProfileUpdateView(APIView):
         data["access_token"] = tokens["access_token"]
         data["refresh_token"] = tokens["refresh_token"]
 
-        return Response(
-            data,
-            status=status.HTTP_200_OK,
+        response = Response(data, status=status.HTTP_200_OK)
+        _set_auth_cookies(
+            response,
+            access_token=tokens["access_token"],
+            refresh_token=tokens["refresh_token"],
         )
+        return response
 
 
 class ProfileDetailView(APIView):
