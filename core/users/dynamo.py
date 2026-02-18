@@ -1,5 +1,6 @@
 import os
 import boto3
+from botocore.exceptions import ClientError
 from datetime import datetime
 import logging
 
@@ -35,6 +36,12 @@ class DynamoActivityClient:
                     ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
                 )
                 logger.info("Table %s created.", TABLE_NAME)
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code")
+            if error_code == "ResourceInUseException":
+                logger.info("Table %s already exists.", TABLE_NAME)
+            else:
+                logger.exception("Error creating table: %s", e)
         except Exception as e:
             logger.exception("Error creating table: %s", e)
 

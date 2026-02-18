@@ -1,6 +1,7 @@
 import logging
 
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.db.models import Count, Q
 from drf_spectacular.utils import OpenApiTypes, extend_schema, inline_serializer
 from rest_framework import decorators, serializers, status, viewsets
@@ -190,12 +191,40 @@ class ChallengeViewSet(viewsets.ModelViewSet):
         challenge = self.get_object()
         user = request.user
         progress, _ = UserProgress.objects.get_or_create(user=user, challenge=challenge)
-        hint_level = int(request.data.get("hint_level", 1))
+
+        try:
+            hint_level = int(request.data.get("hint_level", 1))
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "hint_level must be an integer between 1 and 3."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if hint_level < 1 or hint_level > 3:
+            return Response(
+                {"error": "hint_level must be between 1 and 3."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         if progress.ai_hints_purchased < hint_level:
             return Response(
                 {"error": f"AI Hint Level {hint_level} not purchased for this level."},
                 status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
+
+        # Enforce deterministic max of 3 generated hints per challenge:
+        # one unique hint per level, cached per user/challenge/level.
+        cache_key = f"ai_hint:{user.id}:{challenge.id}:level:{hint_level}"
+        cached_hint = cache.get(cache_key)
+        if cached_hint:
+            return Response(
+                {
+                    "hint": cached_hint,
+                    "hint_level": hint_level,
+                    "max_hints": 3,
+                    "cached": True,
+                },
+                status=status.HTTP_200_OK,
             )
 
         import os
@@ -217,7 +246,13 @@ class ChallengeViewSet(viewsets.ModelViewSet):
         try:
             resp = requests.post(f"{ai_url}/hints", json=payload, headers=headers, timeout=30)
             if resp.status_code == 200:
-                return Response(resp.json())
+                body = resp.json()
+                hint_text = body.get("hint")
+                if isinstance(hint_text, str) and hint_text.strip():
+                    cache.set(cache_key, hint_text, timeout=60 * 60 * 24 * 30)
+                body.setdefault("hint_level", hint_level)
+                body.setdefault("max_hints", 3)
+                return Response(body)
             return Response(
                 {"error": "AI Service Error", "details": resp.text},
                 status=resp.status_code,
@@ -344,8 +379,6 @@ class LeaderboardView(APIView):
         description="Get global leaderboard.",
     )
     def get(self, request):
-        from django.core.cache import cache
-
         cached_data = cache.get("leaderboard_data")
         if cached_data:
             return Response(cached_data)
@@ -383,4 +416,3 @@ class LeaderboardView(APIView):
 
         cache.set("leaderboard_data", data, timeout=30)
         return Response(data)
-

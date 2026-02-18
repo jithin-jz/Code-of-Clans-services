@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Optional
 import httpx
 import asyncio
@@ -6,7 +7,7 @@ import asyncio
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -73,13 +74,64 @@ class HintRequest(BaseModel):
     user_code: str
     challenge_slug: str
     language: str = "python"
-    hint_level: int = 1  # 1: Vague, 2: Moderate, 3: Specific
+    hint_level: int = Field(default=1, ge=1, le=3)  # 1: Vague, 2: Moderate, 3: Specific
     user_xp: int = 0
 
 class AnalyzeRequest(BaseModel):
     user_code: str
     challenge_slug: str
     language: str = "python"
+
+
+CODE_BLOCK_PATTERN = re.compile(r"```[\s\S]*?```", flags=re.MULTILINE)
+CODE_LIKE_LINE_PATTERN = re.compile(
+    r"^\s*(def |class |for |while |if |elif |else:|try:|except |return |import |from |\w+\s*=|print\(|\w+\(.*\):)"
+)
+
+
+def sanitize_guidance_output(text: str, mode: str) -> str:
+    """
+    Removes code-like answer leakage from model output so only guidance remains.
+    """
+    if not text:
+        return text
+
+    without_blocks = CODE_BLOCK_PATTERN.sub("", text)
+    kept_lines = []
+    removed_code_lines = 0
+
+    for line in without_blocks.splitlines():
+        if CODE_LIKE_LINE_PATTERN.match(line):
+            removed_code_lines += 1
+            continue
+        kept_lines.append(line)
+
+    cleaned = "\n".join(kept_lines).strip()
+
+    if removed_code_lines:
+        logger.warning(
+            "Sanitized %s code-like lines from %s response.", removed_code_lines, mode
+        )
+
+    if cleaned:
+        return cleaned
+
+    if mode == "hint":
+        return (
+            "Focus on the core logic, break the problem into small steps, "
+            "and implement each step without copying a full solution."
+        )
+
+    return (
+        "Findings\n"
+        "- Improve correctness by validating edge cases first.\n\n"
+        "Edge Cases\n"
+        "- Test empty input, minimal input, and boundary values.\n\n"
+        "Complexity\n"
+        "- Re-evaluate time and space complexity for your current approach.\n\n"
+        "Refactor Suggestion\n"
+        "- Split logic into small functions with clear responsibilities."
+    )
 
 
 async def fetch_challenge_context(challenge_slug: str):
@@ -193,8 +245,9 @@ async def generate_hint(
                 "rag_context": rag_context
             })
             
+        safe_hint = sanitize_guidance_output(hint, mode="hint")
         logger.info("Hint generated successfully")
-        return {"hint": hint}
+        return {"hint": safe_hint, "hint_level": request.hint_level, "max_hints": 3}
     except Exception as e:
          logger.error(f"LLM Error (All providers failed): {e}", exc_info=True)
          raise HTTPException(status_code=500, detail="Error generating hint")
@@ -258,8 +311,9 @@ async def analyze_code(
                 "rag_context": rag_context,
             })
 
+        safe_review = sanitize_guidance_output(review, mode="analyze")
         logger.info("AI code review generated successfully")
-        return {"review": review}
+        return {"review": safe_review}
     except Exception as e:
         logger.error(f"LLM Error on analyze (All providers failed): {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error generating analysis")
