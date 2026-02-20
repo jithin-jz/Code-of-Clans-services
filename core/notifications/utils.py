@@ -1,4 +1,7 @@
 import logging
+import json
+import redis
+import os
 from django.conf import settings
 from .models import FCMToken
 
@@ -9,6 +12,9 @@ from firebase_admin import messaging, credentials
 
 logger = logging.getLogger(__name__)
 
+# Initialize Redis client for real-time WebSocket notifications
+redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379/0"))
+
 # Initialize Firebase Admin SDK
 try:
     if not firebase_admin._apps:
@@ -17,10 +23,30 @@ try:
 except Exception as e:
     logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
 
+def notify_via_ws(user_id, data):
+    """
+    Publishes notification data to Redis for WebSocket broadcasting.
+    """
+    try:
+        channel = f"notifications_{user_id}"
+        redis_client.publish(channel, json.dumps(data))
+        logger.info(f"Published notification to Redis channel {channel}")
+    except Exception as e:
+        logger.error(f"Failed to publish notification to Redis: {e}")
+
 def send_fcm_push(user, title, body, data=None):
     """
     Sends a push notification to all devices registered for a user.
     """
+    # Also trigger WebSocket notification for immediate UI update
+    ws_data = {
+        "type": "notification",
+        "title": title,
+        "body": body,
+        "data": data or {}
+    }
+    notify_via_ws(user.id, ws_data)
+
     tokens = list(FCMToken.objects.filter(user=user).values_list('token', flat=True))
     
     if not tokens:

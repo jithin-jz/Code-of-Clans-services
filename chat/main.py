@@ -168,7 +168,7 @@ def channel_key(room: str) -> str:
 
 
 # --------------------------------------------------
-# Connection Manager
+# Connection Managers
 # --------------------------------------------------
 
 class ConnectionManager:
@@ -190,14 +190,14 @@ class ConnectionManager:
             
             # Cleanup if room empty
             if not self.active[room]:
-                del self.active[room]
+                self.active.pop(room, None)
                 if room in self.tasks:
                     self.tasks[room].cancel()
                     try:
                         await self.tasks[room]
                     except asyncio.CancelledError:
                         pass
-                    del self.tasks[room]
+                    self.tasks.pop(room, None)
 
     async def redis_subscriber(self, room: str):
         """Subscribes to Redis channel and broadcasts to local websockets."""
@@ -236,8 +236,65 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+class NotificationManager:
+    def __init__(self):
+        self.active: Dict[int, List[WebSocket]] = {}
+        self.tasks: Dict[int, asyncio.Task] = {}
+
+    async def connect(self, ws: WebSocket, user_id: int):
+        await ws.accept()
+        self.active.setdefault(user_id, []).append(ws)
+        
+        if len(self.active[user_id]) == 1 and user_id not in self.tasks:
+            self.tasks[user_id] = asyncio.create_task(self.notification_subscriber(user_id))
+            logger.info(f"Started notification subscriber for user {user_id}")
+
+    async def disconnect(self, ws: WebSocket, user_id: int):
+        if user_id in self.active and ws in self.active[user_id]:
+            self.active[user_id].remove(ws)
+            if not self.active[user_id]:
+                self.active.pop(user_id, None)
+                if user_id in self.tasks:
+                    self.tasks[user_id].cancel()
+                    try:
+                        await self.tasks[user_id]
+                    except asyncio.CancelledError:
+                        pass
+                    self.tasks.pop(user_id, None)
+                    logger.info(f"Stopped notification subscriber for user {user_id}")
+
+    async def notification_subscriber(self, user_id: int):
+        pubsub = redis_client.pubsub()
+        channel = f"notifications_{user_id}"
+        await pubsub.subscribe(channel)
+
+        try:
+            async for event in pubsub.listen():
+                if event["type"] == "message":
+                    payload = json.loads(event["data"])
+                    await self.broadcast_user(user_id, payload)
+        except asyncio.CancelledError:
+            await pubsub.unsubscribe(channel)
+            raise
+        except Exception as e:
+            logger.error(f"Error in notification subscriber for user {user_id}: {e}")
+            await pubsub.unsubscribe(channel)
+
+    async def broadcast_user(self, user_id: int, payload: dict):
+        dead = []
+        message = json.dumps(payload)
+        for ws in self.active.get(user_id, []):
+            try:
+                await ws.send_text(message)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            await self.disconnect(ws, user_id)
+
+notification_manager = NotificationManager()
+
 # --------------------------------------------------
-# WebSocket Endpoint
+# WebSocket Endpoints
 # --------------------------------------------------
 
 @app.websocket("/ws/chat/{room}")
@@ -391,3 +448,35 @@ async def chat_ws(ws: WebSocket, room: str):
             count=len(manager.active.get(room, [])),
         )
         await redis_client.publish(channel_key(room), leave.model_dump_json())
+
+
+@app.websocket("/ws/notifications")
+async def notifications_ws(ws: WebSocket):
+    # ---- Auth ----
+    token = ws.query_params.get("token")
+    if not token:
+        token = ws.cookies.get(JWT_ACCESS_COOKIE_NAME)
+    
+    if not token:
+        logger.warning("Notification WebSocket connection rejected: no token")
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    payload = verify_jwt(token)
+    if not payload:
+        logger.warning("Notification WebSocket connection rejected: invalid JWT")
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    user_id = payload["user_id"]
+
+    # ---- Connect ----
+    await notification_manager.connect(ws, user_id)
+
+    # ---- Keep alive loop ----
+    try:
+        while True:
+            # Just wait for messages or disconnection
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        await notification_manager.disconnect(ws, user_id)
