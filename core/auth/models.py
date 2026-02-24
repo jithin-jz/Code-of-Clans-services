@@ -11,8 +11,8 @@ class EmailOTP(models.Model):
     """
 
     email = models.EmailField()
-    otp = models.CharField(max_length=6)
+    otp = models.CharField(max_length=128)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.email} - {self.otp}"
+        return f"{self.email} - OTP"

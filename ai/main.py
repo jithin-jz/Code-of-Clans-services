@@ -1,10 +1,13 @@
 import logging
 import re
+import time
+import hmac
+from hashlib import sha256
 from typing import Optional
 import httpx
 import asyncio
 
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -134,10 +137,57 @@ def sanitize_guidance_output(text: str, mode: str) -> str:
     )
 
 
-async def fetch_challenge_context(challenge_slug: str):
+def _build_internal_headers(path: str) -> dict[str, str]:
     headers = {"X-Internal-API-Key": settings.INTERNAL_API_KEY}
+    signing_secret = (settings.INTERNAL_SIGNING_SECRET or "").strip()
+    if signing_secret:
+        timestamp = str(int(time.time()))
+        signature = hmac.new(
+            signing_secret.encode("utf-8"),
+            f"{timestamp}:{path}".encode("utf-8"),
+            sha256,
+        ).hexdigest()
+        headers["X-Internal-Timestamp"] = timestamp
+        headers["X-Internal-Signature"] = signature
+    return headers
+
+
+def _authorize_internal_request(
+    path: str,
+    api_key: Optional[str],
+    timestamp: Optional[str],
+    signature: Optional[str],
+) -> bool:
+    if api_key != settings.INTERNAL_API_KEY:
+        return False
+
+    signing_secret = (settings.INTERNAL_SIGNING_SECRET or "").strip()
+    if not signing_secret:
+        return True
+
+    if not timestamp or not signature:
+        return False
     try:
-        url = f"{settings.CORE_SERVICE_URL}/api/challenges/{challenge_slug}/context/"
+        ts = int(timestamp)
+    except (TypeError, ValueError):
+        return False
+
+    if abs(int(time.time()) - ts) > 120:
+        return False
+
+    expected = hmac.new(
+        signing_secret.encode("utf-8"),
+        f"{timestamp}:{path}".encode("utf-8"),
+        sha256,
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+async def fetch_challenge_context(challenge_slug: str):
+    try:
+        path = f"/api/challenges/{challenge_slug}/context/"
+        url = f"{settings.CORE_SERVICE_URL}{path}"
+        headers = _build_internal_headers(path)
         logger.info(f"Fetching context from: {url}")
         async with httpx.AsyncClient() as client:
             response = await client.get(url, headers=headers, timeout=5)
@@ -181,12 +231,20 @@ def health():
 
 @app.post("/hints")
 async def generate_hint(
-    request: HintRequest, 
-    x_internal_api_key: Optional[str] = Header(None, alias="X-Internal-API-Key")
+    request: HintRequest,
+    http_request: Request,
+    x_internal_api_key: Optional[str] = Header(None, alias="X-Internal-API-Key"),
+    x_internal_timestamp: Optional[str] = Header(None, alias="X-Internal-Timestamp"),
+    x_internal_signature: Optional[str] = Header(None, alias="X-Internal-Signature"),
 ):
     logger.info(f"Received hint request for challenge: {request.challenge_slug}")
 
-    if x_internal_api_key != settings.INTERNAL_API_KEY:
+    if not _authorize_internal_request(
+        path=http_request.url.path,
+        api_key=x_internal_api_key,
+        timestamp=x_internal_timestamp,
+        signature=x_internal_signature,
+    ):
         logger.warning(f"Unauthorized hint request. Key: {x_internal_api_key}")
         raise HTTPException(status_code=403, detail="Unauthorized")
     
@@ -255,11 +313,19 @@ async def generate_hint(
 @app.post("/analyze")
 async def analyze_code(
     request: AnalyzeRequest,
+    http_request: Request,
     x_internal_api_key: Optional[str] = Header(None, alias="X-Internal-API-Key"),
+    x_internal_timestamp: Optional[str] = Header(None, alias="X-Internal-Timestamp"),
+    x_internal_signature: Optional[str] = Header(None, alias="X-Internal-Signature"),
 ):
     logger.info(f"Received analyze request for challenge: {request.challenge_slug}")
 
-    if x_internal_api_key != settings.INTERNAL_API_KEY:
+    if not _authorize_internal_request(
+        path=http_request.url.path,
+        api_key=x_internal_api_key,
+        timestamp=x_internal_timestamp,
+        signature=x_internal_signature,
+    ):
         logger.warning(f"Unauthorized analyze request. Key: {x_internal_api_key}")
         raise HTTPException(status_code=403, detail="Unauthorized")
 

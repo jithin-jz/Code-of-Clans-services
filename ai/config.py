@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     # API Keys & Auth
     # API Keys & Auth
     INTERNAL_API_KEY: str
+    INTERNAL_SIGNING_SECRET: Optional[str] = None
     GROQ_API_KEY: Optional[str] = None
     
     # LLM Settings
@@ -35,8 +36,6 @@ class Settings(BaseSettings):
     def validate_keys(self):
         if not self.INTERNAL_API_KEY or not self.INTERNAL_API_KEY.strip():
             raise ValueError("INTERNAL_API_KEY must be set and non-empty")
-        if not self.GROQ_API_KEY:
-            raise ValueError("Missing LLM API Key: GROQ_API_KEY must be set")
 
 settings = Settings()
 settings.validate_keys()

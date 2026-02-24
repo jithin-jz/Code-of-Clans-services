@@ -41,10 +41,15 @@ The **AI Service** provides advanced intelligence and tutor features to the plat
    pip install -r requirements.txt
    ```
 3. **Environment Variables:**
-   Copy `.env.example` to `.env`. Required keys:
-   - `OPENAI_API_KEY` (if using OpenAI)
-   - `CHROMA_URL`
-   - `LLM_PROVIDER` (openai/huggingface)
+   Configure `.env` with required keys:
+   - `CORE_SERVICE_URL`
+   - `INTERNAL_API_KEY`
+   - `GROQ_API_KEY`
+   - `OPENAI_API_BASE`
+   - `MODEL_NAME`
+   - `EMBEDDING_MODEL`
+   - `CHROMA_SERVER_HOST`
+   - `CHROMA_SERVER_HTTP_PORT`
 
 4. **Start the service:**
    ```bash
@@ -53,6 +58,7 @@ The **AI Service** provides advanced intelligence and tutor features to the plat
 
 ## 📡 API Endpoints
 
-- `POST /ai/chat`: Main endpoint for sending queries to the AI tutor.
-- `GET /ai/health`: Health check endpoint.
+- `POST /hints`: Generate challenge hint guidance.
+- `POST /analyze`: Generate code review feedback.
+- `GET /health`: Health check endpoint.
 - `GET /docs`: Interactive Swagger documentation.

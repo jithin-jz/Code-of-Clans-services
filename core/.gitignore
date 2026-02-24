@@ -33,13 +33,6 @@ staticfiles/
 !.env.example
 
 # =========================
-# Migrations (optional)
-# =========================
-# If you want migrations tracked, REMOVE these two lines
-**/migrations/*
-!**/migrations/__init__.py
-
-# =========================
 # Testing / coverage
 # =========================
 .coverage

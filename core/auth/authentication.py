@@ -87,7 +87,7 @@ class JWTAuthenticationScheme(OpenApiAuthenticationExtension):
     )
     name = "JWTAuth"  # Name shown in Swagger's Authorize dialog
 
-    def get_security_definition(self, auto_schema):
+    def get_security_definition(self, _auto_schema):
         # Define Bearer JWT authentication for OpenAPI/Swagger
         return {
             "type": "http",

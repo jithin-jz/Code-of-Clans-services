@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from rest_framework import viewsets, status, serializers
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -8,8 +10,6 @@ from .serializers import StoreItemSerializer
 from xpoint.services import XPService
 from auth.throttles import StoreRateThrottle
 
-import os
-from django.conf import settings
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 
@@ -72,18 +72,20 @@ class PurchaseItemView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if user.profile.xp < item.cost:
+        try:
+            remaining_xp = XPService.add_xp(
+                user,
+                -item.cost,
+                source="store_purchase",
+                description=f"Purchased {item.name}",
+            )
+        except ValueError:
+            user.profile.refresh_from_db()
+            shortage = max(0, item.cost - user.profile.xp)
             return Response(
-                {"error": f"Insufficient XP. Need {item.cost - user.profile.xp} more."},
+                {"error": f"Insufficient XP. Need {shortage} more."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        remaining_xp = XPService.add_xp(
-            user,
-            -item.cost,
-            source="store_purchase",
-            description=f"Purchased {item.name}",
-        )
 
         Purchase.objects.create(user=user, item=item)
 
@@ -173,12 +175,12 @@ class ImageUploadView(APIView):
                 {"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        directory = os.path.join("store")
+        safe_name = Path(file_obj.name).name
         path = default_storage.save(
-            os.path.join(directory, file_obj.name), ContentFile(file_obj.read())
+            f"store/{safe_name}", ContentFile(file_obj.read())
         )
 
-        url = os.path.join(settings.MEDIA_URL, path).replace("\\", "/")
+        url = default_storage.url(path)
 
         return Response({"url": url}, status=status.HTTP_201_CREATED)
 

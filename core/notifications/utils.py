@@ -17,9 +17,13 @@ redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379/0"))
 
 # Initialize Firebase Admin SDK
 try:
-    if not firebase_admin._apps:
+    if settings.FIREBASE_SERVICE_ACCOUNT_PATH and not firebase_admin._apps:
         cred = credentials.Certificate(settings.FIREBASE_SERVICE_ACCOUNT_PATH)
         firebase_admin.initialize_app(cred)
+    elif not settings.FIREBASE_SERVICE_ACCOUNT_PATH:
+        logger.warning(
+            "FIREBASE_SERVICE_ACCOUNT_PATH is not configured; push notifications are disabled."
+        )
 except Exception as e:
     logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
 
@@ -49,6 +53,9 @@ def send_fcm_push(user, title, body, data=None):
     if not tokens:
         logger.info(f"No FCM tokens found for user {user.username}")
         return
+
+    if not firebase_admin._apps:
+        logger.warning("Firebase not initialized; push delivery may fail for %s", user.username)
 
     try:
         message = messaging.MulticastMessage(

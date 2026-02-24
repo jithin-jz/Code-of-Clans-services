@@ -22,6 +22,7 @@ from .models import UserProfile, UserFollow
 
 from .serializers import (
     UserSerializer,
+    PublicUserSerializer,
     UserSummarySerializer,
     FollowToggleResponseSerializer,
     RedeemReferralSerializer,
@@ -34,6 +35,8 @@ from challenges.models import UserProgress
 
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
+
+from project.media import build_file_url
 
 
 def _set_auth_cookies(response, access_token: str, refresh_token: str | None = None):
@@ -167,8 +170,9 @@ class ProfileUpdateView(APIView):
         tokens = generate_tokens(user)
 
         data = UserSerializer(user, context={"request": request}).data
-        data["access_token"] = tokens["access_token"]
-        data["refresh_token"] = tokens["refresh_token"]
+        if getattr(settings, "JWT_RETURN_TOKENS_IN_BODY", False):
+            data["access_token"] = tokens["access_token"]
+            data["refresh_token"] = tokens["refresh_token"]
 
         response = Response(data, status=status.HTTP_200_OK)
         _set_auth_cookies(
@@ -183,11 +187,11 @@ class ProfileDetailView(APIView):
     """View to get public profile details."""
 
     permission_classes = [AllowAny]
-    serializer_class = UserSerializer
+    serializer_class = PublicUserSerializer
 
     @extend_schema(
         parameters=[OpenApiParameter("username", str, OpenApiParameter.PATH)],
-        responses={200: UserSerializer, 404: OpenApiTypes.OBJECT},
+        responses={200: PublicUserSerializer, 404: OpenApiTypes.OBJECT},
         description="Get public profile details by username.",
     )
     def get(self, request, username):
@@ -203,7 +207,7 @@ class ProfileDetailView(APIView):
                     {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
                 )
 
-            data = UserSerializer(user, context={"request": request}).data
+            data = PublicUserSerializer(user, context={"request": request}).data
 
             # Add stats (redundant if serializer has them, but ensuring consistency)
             data["followers_count"] = user.followers.count()
@@ -211,6 +215,9 @@ class ProfileDetailView(APIView):
 
             # Cache the public data for 5 minutes
             cache.set(cache_key, data, 300)
+        else:
+            # Avoid mutating cached objects with request-specific flags.
+            data = dict(data)
 
         # Inject request-specific data (NEVER CACHE THIS)
         if request.user.is_authenticated:
@@ -314,11 +321,7 @@ class UserFollowersView(APIView):
                     "username": follower_user.username,
                     "first_name": follower_user.first_name,
                     "avatar_url": (
-                        (
-                            f"{settings.BACKEND_URL}{profile.avatar.url}"
-                            if profile.avatar
-                            else None
-                        )
+                        build_file_url(profile.avatar, request)
                         if profile
                         else None
                     ),
@@ -364,11 +367,7 @@ class UserFollowingView(APIView):
                     "username": following_user.username,
                     "first_name": following_user.first_name,
                     "avatar_url": (
-                        (
-                            f"{settings.BACKEND_URL}{profile.avatar.url}"
-                            if profile.avatar
-                            else None
-                        )
+                        build_file_url(profile.avatar, request)
                         if profile
                         else None
                     ),
@@ -488,7 +487,7 @@ class SuggestedUsersView(APIView):
                     "username": user.username,
                     "first_name": user.first_name,
                     "avatar_url": (
-                        request.build_absolute_uri(profile.avatar.url)
+                        build_file_url(profile.avatar, request)
                         if profile and profile.avatar
                         else None
                     ),

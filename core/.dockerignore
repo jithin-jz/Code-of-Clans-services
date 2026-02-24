@@ -16,6 +16,7 @@ pip-log.txt
 
 # Environment
 .env
+serviceAccountKey.json
 
 # IDE
 .vscode/

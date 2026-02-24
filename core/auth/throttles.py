@@ -18,7 +18,7 @@ class AuthRateThrottle(SimpleRateThrottle):
 
     scope = "auth"
 
-    def get_cache_key(self, request, view):
+    def get_cache_key(self, request, _view):
         # For auth, use IP address since user might not be authenticated
         return self.cache_format % {
             "scope": self.scope,
@@ -36,7 +36,7 @@ class StoreRateThrottle(SimpleRateThrottle):
 
     scope = "store"
 
-    def get_cache_key(self, request, view):
+    def get_cache_key(self, request, _view):
         if request.user.is_authenticated:
             ident = request.user.pk
         else:
@@ -55,7 +55,7 @@ class SensitiveOperationThrottle(SimpleRateThrottle):
 
     scope = "sensitive"
 
-    def get_cache_key(self, request, view):
+    def get_cache_key(self, request, _view):
         return self.cache_format % {
             "scope": self.scope,
             "ident": self.get_ident(request),
@@ -72,7 +72,7 @@ class BurstRateThrottle(SimpleRateThrottle):
 
     scope = "burst"
 
-    def get_cache_key(self, request, view):
+    def get_cache_key(self, request, _view):
         if request.user.is_authenticated:
             ident = request.user.pk
         else:
@@ -91,7 +91,7 @@ class NotificationRateThrottle(SimpleRateThrottle):
 
     scope = "notifications"
 
-    def get_cache_key(self, request, view):
+    def get_cache_key(self, request, _view):
         if request.user.is_authenticated:
             ident = request.user.pk
         else:

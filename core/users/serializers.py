@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from drf_spectacular.utils import extend_schema_field, OpenApiTypes
 from .models import UserProfile
+from project.media import build_file_url
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -41,25 +42,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_avatar_url(self, obj):
-        if obj.avatar:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.avatar.url)
-            from django.conf import settings
-
-            return f"{settings.BACKEND_URL.rstrip('/')}{obj.avatar.url}"
-        return None
+        return build_file_url(obj.avatar, self.context.get("request"))
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_banner_url(self, obj):
-        if obj.banner:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.banner.url)
-            from django.conf import settings
-
-            return f"{settings.BACKEND_URL.rstrip('/')}{obj.banner.url}"
-        return None
+        return build_file_url(obj.banner, self.context.get("request"))
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -120,14 +107,9 @@ class UserSummarySerializer(serializers.Serializer):
 
     @extend_schema_field(OpenApiTypes.URI)
     def get_avatar_url(self, obj):
-        if hasattr(obj, "profile") and obj.profile.avatar:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.profile.avatar.url)
-            from django.conf import settings
-
-            return f"{settings.BACKEND_URL.rstrip('/')}{obj.profile.avatar.url}"
-        return None
+        if not hasattr(obj, "profile"):
+            return None
+        return build_file_url(obj.profile.avatar, self.context.get("request"))
 
     @extend_schema_field(bool)
     def get_is_following(self, obj):
@@ -152,3 +134,67 @@ class RedeemReferralSerializer(serializers.Serializer):
     code = serializers.CharField(
         required=True, help_text="The referral code to redeem."
     )
+
+
+class PublicUserProfileSerializer(serializers.ModelSerializer):
+    avatar_url = serializers.SerializerMethodField()
+    banner_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserProfile
+        fields = [
+            "avatar_url",
+            "banner_url",
+            "bio",
+            "xp",
+            "created_at",
+            "active_theme",
+            "active_font",
+            "active_effect",
+            "active_victory",
+        ]
+
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_avatar_url(self, obj):
+        return build_file_url(obj.avatar, self.context.get("request"))
+
+    @extend_schema_field(OpenApiTypes.URI)
+    def get_banner_url(self, obj):
+        return build_file_url(obj.banner, self.context.get("request"))
+
+
+class PublicUserSerializer(serializers.ModelSerializer):
+    profile = serializers.SerializerMethodField()
+    followers_count = serializers.SerializerMethodField()
+    following_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "first_name",
+            "last_name",
+            "profile",
+            "followers_count",
+            "following_count",
+        ]
+
+    @extend_schema_field(PublicUserProfileSerializer)
+    def get_profile(self, obj):
+        try:
+            return PublicUserProfileSerializer(obj.profile, context=self.context).data
+        except Exception:
+            return None
+
+    @extend_schema_field(int)
+    def get_followers_count(self, obj):
+        if hasattr(obj, "followers_total"):
+            return obj.followers_total
+        return obj.followers.count()
+
+    @extend_schema_field(int)
+    def get_following_count(self, obj):
+        if hasattr(obj, "following_total"):
+            return obj.following_total
+        return obj.following.count()

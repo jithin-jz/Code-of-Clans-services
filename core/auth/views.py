@@ -52,11 +52,10 @@ def _clear_auth_cookies(response):
 
 
 def _auth_success_response(request, user, result):
-    payload = {
-        "access_token": result["access_token"],
-        "refresh_token": result["refresh_token"],
-        "user": UserSerializer(user, context={"request": request}).data,
-    }
+    payload = {"user": UserSerializer(user, context={"request": request}).data}
+    if getattr(settings, "JWT_RETURN_TOKENS_IN_BODY", False):
+        payload["access_token"] = result["access_token"]
+        payload["refresh_token"] = result["refresh_token"]
     response = Response(payload, status=status.HTTP_200_OK)
     _set_auth_cookies(
         response,
@@ -111,8 +110,6 @@ class GitHubCallbackView(APIView):
             200: inline_serializer(
                 name="AuthResponse",
                 fields={
-                    "access_token": serializers.CharField(),
-                    "refresh_token": serializers.CharField(),
                     "user": UserSerializer(),
                 },
             ),
@@ -179,8 +176,6 @@ class GoogleCallbackView(APIView):
             200: inline_serializer(
                 name="GoogleAuthResponse",
                 fields={
-                    "access_token": serializers.CharField(),
-                    "refresh_token": serializers.CharField(),
                     "user": UserSerializer(),
                 },
             ),
@@ -219,7 +214,6 @@ class RefreshTokenView(APIView):
             200: inline_serializer(
                 name="RefreshResponse",
                 fields={
-                    "access_token": serializers.CharField(),
                     "user": UserSerializer(),
                 },
             ),
@@ -265,13 +259,11 @@ class RefreshTokenView(APIView):
 
         new_access_token = generate_access_token(user)
 
-        response = Response(
-            {
-                "access_token": new_access_token,
-                "user": UserSerializer(user, context={"request": request}).data,
-            },
-            status=status.HTTP_200_OK,
-        )
+        payload = {"user": UserSerializer(user, context={"request": request}).data}
+        if getattr(settings, "JWT_RETURN_TOKENS_IN_BODY", False):
+            payload["access_token"] = new_access_token
+
+        response = Response(payload, status=status.HTTP_200_OK)
         _set_auth_cookies(response, access_token=new_access_token)
         return response
 

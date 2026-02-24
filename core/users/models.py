@@ -49,7 +49,6 @@ class UserProfile(models.Model):
     )
 
     # Public Profile Visuals
-    # Public Profile Visuals
     avatar = models.ImageField(
         upload_to="avatars/", blank=True, null=True, help_text="User's profile picture."
     )
@@ -181,6 +180,7 @@ class UserFollow(models.Model):
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
+    _ = sender, kwargs
     # Automatically create profile when a user is created
     if created and not hasattr(instance, "profile"):
         UserProfile.objects.create(

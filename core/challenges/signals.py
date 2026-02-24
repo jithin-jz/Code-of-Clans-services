@@ -6,17 +6,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# @receiver(post_save, sender=UserProfile)
-# def create_initial_challenge_signal(sender, instance, created, **kwargs):
-#     """
-#     Automatically creates the Level 1 challenge when a new UserProfile is created.
-#     """
-#     if created:
-#         # Disabled in favor of AI generation on first access
-#         # ChallengeService.create_initial_challenge(instance.user)
-#         pass
-
-
 @receiver(post_save, sender=UserProgress)
 def auto_generate_certificate(sender, instance, created, **kwargs):
     """
@@ -24,6 +13,9 @@ def auto_generate_certificate(sender, instance, created, **kwargs):
 
     Triggered after UserProgress is saved with COMPLETED status.
     """
+    # Keep signature compatible with Django signal kwargs.
+    _ = sender, created, kwargs
+
     # Only trigger on completion
     if instance.status != UserProgress.Status.COMPLETED:
         return

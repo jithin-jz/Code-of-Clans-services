@@ -24,16 +24,22 @@ def _parse_csv(value: str | None, default: list[str]) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def _parse_bool(value: str | None, default: bool) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 ALLOWED_HOSTS = _parse_csv(
     os.getenv("ALLOWED_HOSTS"),
-    ["localhost", "127.0.0.1", "core"],
+    ["localhost", "127.0.0.1", "core", "api.localhost"],
 )
+
+USE_CLOUDINARY = True
 
 # Applications
 INSTALLED_APPS = [
-    # "daphne",
     "django.contrib.admin",
-    # "channels",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
@@ -42,6 +48,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "drf_spectacular",
+    
     "auth",
     "rewards",
     "users",
@@ -57,6 +64,10 @@ INSTALLED_APPS = [
     "posts",
     "notifications",
 ]
+
+staticfiles_index = INSTALLED_APPS.index("django.contrib.staticfiles")
+INSTALLED_APPS.insert(staticfiles_index, "cloudinary_storage")
+INSTALLED_APPS.append("cloudinary")
 
 # Middleware
 MIDDLEWARE = [
@@ -157,6 +168,28 @@ STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
+cloudinary_cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME", "").strip()
+cloudinary_api_key = os.getenv("CLOUDINARY_API_KEY", "").strip()
+cloudinary_api_secret = os.getenv("CLOUDINARY_API_SECRET", "").strip()
+
+if not all([cloudinary_cloud_name, cloudinary_api_key, cloudinary_api_secret]):
+    raise ImproperlyConfigured(
+        "Cloudinary media storage is required. Set CLOUDINARY_CLOUD_NAME, "
+        "CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET."
+    )
+
+CLOUDINARY_STORAGE = {
+    "CLOUD_NAME": cloudinary_cloud_name,
+    "API_KEY": cloudinary_api_key,
+    "API_SECRET": cloudinary_api_secret,
+    "SECURE": _parse_bool(os.getenv("CLOUDINARY_SECURE"), default=True),
+}
+
+STORAGES = {
+    "default": {"BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
+
 # Backend URL (for absolute media paths)
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
@@ -200,12 +233,19 @@ CORS_ALLOWED_ORIGINS = _parse_csv(
         "http://127.0.0.1:5176",
     ],
 )
+CORS_ALLOWED_ORIGIN_REGEXES = _parse_csv(
+    os.getenv("CORS_ALLOWED_ORIGIN_REGEXES"),
+    [r"^https://.*\.vercel\.app$"],
+)
 CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = _parse_csv(
     os.getenv("CSRF_TRUSTED_ORIGINS"),
     [
+        FRONTEND_URL,
         "http://localhost",
         "http://127.0.0.1",
+        "https://localhost",
+        "https://127.0.0.1",
     ],
 )
 
@@ -277,13 +317,32 @@ JWT_ACCESS_TOKEN_LIFETIME = 60 * 60
 JWT_REFRESH_TOKEN_LIFETIME = 60 * 60 * 24 * 7
 
 # HttpOnly JWT cookie settings
-JWT_COOKIE_SECURE = os.getenv("JWT_COOKIE_SECURE", "false").lower() == "true"
+JWT_COOKIE_SECURE = _parse_bool(
+    os.getenv("JWT_COOKIE_SECURE"), default=not DEBUG
+)
 JWT_COOKIE_SAMESITE = os.getenv("JWT_COOKIE_SAMESITE", "Lax")
 JWT_ACCESS_COOKIE_NAME = os.getenv("JWT_ACCESS_COOKIE_NAME", "access_token")
 JWT_REFRESH_COOKIE_NAME = os.getenv("JWT_REFRESH_COOKIE_NAME", "refresh_token")
+JWT_RETURN_TOKENS_IN_BODY = _parse_bool(
+    os.getenv("JWT_RETURN_TOKENS_IN_BODY"), default=False
+)
 
 if JWT_COOKIE_SECURE:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+SECURE_SSL_REDIRECT = _parse_bool(os.getenv("SECURE_SSL_REDIRECT"), default=not DEBUG)
+SESSION_COOKIE_SECURE = JWT_COOKIE_SECURE
+CSRF_COOKIE_SECURE = JWT_COOKIE_SECURE
+SECURE_HSTS_SECONDS = int(
+    os.getenv("SECURE_HSTS_SECONDS", "0" if DEBUG else "31536000")
+)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _parse_bool(
+    os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS"), default=not DEBUG
+)
+SECURE_HSTS_PRELOAD = _parse_bool(os.getenv("SECURE_HSTS_PRELOAD"), default=not DEBUG)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+USE_X_FORWARDED_HOST = True
 
 # OAuth
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")

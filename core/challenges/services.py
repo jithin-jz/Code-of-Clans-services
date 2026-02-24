@@ -149,15 +149,15 @@ class ChallengeService:
         current_count = progress.ai_hints_purchased
         cost = 10 * (current_count + 1)
 
-        if user.profile.xp >= cost:
-            XPService.add_xp(user, -cost, source="ai_assist")
+        try:
+            remaining_xp = XPService.add_xp(user, -cost, source="ai_assist")
+        except ValueError as exc:
+            raise PermissionError("Insufficient XP") from exc
 
-            progress.ai_hints_purchased += 1
-            progress.save()
+        progress.ai_hints_purchased += 1
+        progress.save(update_fields=["ai_hints_purchased"])
 
-            return user.profile.xp
-        else:
-            raise PermissionError("Insufficient XP")
+        return remaining_xp
 
     @staticmethod
     def _get_next_level_slug(current_challenge, user):

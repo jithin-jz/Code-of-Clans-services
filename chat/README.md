@@ -46,7 +46,8 @@ The **Chat Service** enables real-time communication between users on the platfo
    Configure `.env` with:
    - `DATABASE_URL` (PostgreSQL connection string)
    - `REDIS_URL`
-   - `JWT_SECRET` (Must match Core service secret)
+   - `JWT_PUBLIC_KEY` (Must match Core service public key)
+   - `JWT_ACCESS_COOKIE_NAME` (defaults to `access_token`)
 
 4. **Start the service:**
    ```bash
@@ -55,6 +56,8 @@ The **Chat Service** enables real-time communication between users on the platfo
 
 ## 📡 WebSocket Protocol
 
-Connect to `ws://localhost/ws/chat/{room_id}` with a valid JWT in the headers or as a query parameter.
+Connect to `ws://localhost/ws/chat/{room_id}` with a valid JWT:
+- Preferred: HttpOnly cookie (`access_token`)
+- Fallback: `Authorization: Bearer <token>` header (non-browser clients)
 - **Format:** JSON
 - **Events:** `message`, `join`, `leave`, `typing`

@@ -1,15 +1,23 @@
 import jwt
 
+import hmac
+from hashlib import sha256
 import requests
 import string
 import secrets
 from datetime import datetime, timedelta, timezone
 from django.conf import settings
+from project.media import build_file_url
 
 
 def generate_otp_code(length=6):
     """Generate a numeric OTP code."""
     return "".join(secrets.choice(string.digits) for _ in range(length))
+
+
+def hash_otp(email: str, otp: str) -> str:
+    normalized = f"{email.lower().strip()}:{otp.strip()}".encode("utf-8")
+    return hmac.new(settings.SECRET_KEY.encode("utf-8"), normalized, sha256).hexdigest()
 
 
 def generate_access_token(user):
@@ -22,11 +30,7 @@ def generate_access_token(user):
         "username": user.username,
         "email": user.email,
         "avatar_url": (
-            (
-                f"{settings.BACKEND_URL.rstrip('/')}{user.profile.avatar.url}"
-                if user.profile.avatar
-                else None
-            )
+            build_file_url(user.profile.avatar)
             if hasattr(user, "profile")
             else None
         ),
@@ -97,6 +101,7 @@ def get_github_access_token(code):
             "redirect_uri": settings.GITHUB_REDIRECT_URI,
         },
         headers={"Accept": "application/json"},
+        timeout=10,
     )
 
     return response.json()
@@ -110,6 +115,7 @@ def get_github_user(access_token):
             "Authorization": f"Bearer {access_token}",
             "Accept": "application/json",
         },
+        timeout=10,
     )
     return response.json()
 
@@ -122,6 +128,7 @@ def get_github_user_email(access_token):
             "Authorization": f"Bearer {access_token}",
             "Accept": "application/json",
         },
+        timeout=10,
     )
     emails = response.json()
     for email in emails:
@@ -143,6 +150,7 @@ def get_google_access_token(code):
             "redirect_uri": settings.GOOGLE_REDIRECT_URI,
             "grant_type": "authorization_code",
         },
+        timeout=10,
     )
 
     return response.json()
@@ -153,5 +161,6 @@ def get_google_user(access_token):
     response = requests.get(
         "https://www.googleapis.com/oauth2/v2/userinfo",
         headers={"Authorization": f"Bearer {access_token}"},
+        timeout=10,
     )
     return response.json()

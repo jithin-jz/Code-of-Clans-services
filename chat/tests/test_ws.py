@@ -22,7 +22,10 @@ async def test_websocket_auth_failure(mock_limiter, mock_verify):
     mock_verify.return_value = None
     
     with pytest.raises(WebSocketDisconnect) as exc:
-        with client.websocket_connect("/ws/chat/general?token=invalid") as websocket:
+        with client.websocket_connect(
+            "/ws/chat/general",
+            headers={"authorization": "Bearer invalid"},
+        ) as websocket:
             pass
     assert exc.value.code == 1008
 
@@ -68,7 +71,10 @@ async def test_websocket_success_flow(mock_dynamo, mock_sessionmaker, mock_redis
     # Mock Dynamo
     mock_dynamo.save_message = AsyncMock()
 
-    with client.websocket_connect("/ws/chat/general?token=valid") as websocket:
+    with client.websocket_connect(
+        "/ws/chat/general",
+        headers={"authorization": "Bearer valid"},
+    ) as websocket:
         # Send a message
         websocket.send_text(json.dumps({"message": "hello world"}))
         

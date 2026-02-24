@@ -1,5 +1,8 @@
 import logging
 import os
+import time
+import hmac
+from hashlib import sha256
 import requests
 
 from django.contrib.auth.models import User
@@ -12,11 +15,30 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from challenges.models import Challenge, UserProgress
-from challenges.serializers import ChallengeSerializer
+from challenges.serializers import ChallengeAdminSerializer, ChallengePublicSerializer
 from challenges.services import ChallengeService
+from project.internal_auth import authorize_internal_request
 from users.models import UserProfile
 
 logger = logging.getLogger(__name__)
+
+
+def _build_internal_headers(path: str) -> dict[str, str]:
+    headers = {
+        "X-Internal-API-Key": os.getenv("INTERNAL_API_KEY", ""),
+        "Content-Type": "application/json",
+    }
+    signing_secret = os.getenv("INTERNAL_SIGNING_SECRET", "").strip()
+    if signing_secret:
+        timestamp = str(int(time.time()))
+        signature = hmac.new(
+            signing_secret.encode("utf-8"),
+            f"{timestamp}:{path}".encode("utf-8"),
+            sha256,
+        ).hexdigest()
+        headers["X-Internal-Timestamp"] = timestamp
+        headers["X-Internal-Signature"] = signature
+    return headers
 
 
 class ChallengeViewSet(viewsets.ModelViewSet):
@@ -25,11 +47,29 @@ class ChallengeViewSet(viewsets.ModelViewSet):
     """
 
     queryset = Challenge.objects.all()
-    serializer_class = ChallengeSerializer
+    serializer_class = ChallengePublicSerializer
     lookup_field = "slug"
 
     def get_queryset(self):
-        return Challenge.objects.all()
+        queryset = Challenge.objects.all()
+        user = getattr(self.request, "user", None)
+        if user and user.is_authenticated and not user.is_staff:
+            queryset = queryset.filter(
+                Q(created_for_user__isnull=True) | Q(created_for_user=user)
+            )
+        return queryset
+
+    def get_serializer_class(self):
+        if self.action in [
+            "create",
+            "update",
+            "partial_update",
+            "destroy",
+            "internal_list",
+            "internal_context",
+        ]:
+            return ChallengeAdminSerializer
+        return ChallengePublicSerializer
 
     def get_permissions(self):
         if self.action in ["internal_context", "internal_list"]:
@@ -41,8 +81,8 @@ class ChallengeViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     @extend_schema(
-        request=ChallengeSerializer,
-        responses={201: ChallengeSerializer, 403: OpenApiTypes.OBJECT},
+        request=ChallengeAdminSerializer,
+        responses={201: ChallengeAdminSerializer, 403: OpenApiTypes.OBJECT},
         description="Create a new challenge (Admin only).",
     )
     def create(self, request, *args, **kwargs):
@@ -52,23 +92,20 @@ class ChallengeViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         request=None,
-        responses={200: ChallengeSerializer(many=True), 403: OpenApiTypes.OBJECT},
+        responses={200: ChallengeAdminSerializer(many=True), 403: OpenApiTypes.OBJECT},
         description="Internal endpoint to list all challenges for indexing (Requires INTERNAL_API_KEY).",
     )
     @decorators.action(detail=False, methods=["get"], url_path="internal-list")
     def internal_list(self, request):
-        internal_key = os.getenv("INTERNAL_API_KEY")
-        request_key = request.headers.get("X-Internal-API-Key")
-
-        if not internal_key or request_key != internal_key:
+        if not authorize_internal_request(request):
             return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
 
         challenges = Challenge.objects.all()
-        serializer = ChallengeSerializer(challenges, many=True)
+        serializer = ChallengeAdminSerializer(challenges, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
-        responses={200: ChallengeSerializer(many=True)},
+        responses={200: ChallengePublicSerializer(many=True)},
         description="List all available challenges with user-specific progress annotations.",
     )
     def list(self, request, *args, **kwargs):
@@ -88,7 +125,7 @@ class ChallengeViewSet(viewsets.ModelViewSet):
         return Response(data, status=status.HTTP_200_OK)
 
     @extend_schema(
-        responses={200: ChallengeSerializer},
+        responses={200: ChallengePublicSerializer},
         description="Retrieve details of a specific challenge including user progress and purchase status.",
     )
     def retrieve(self, request, *args, **kwargs):
@@ -113,13 +150,38 @@ class ChallengeViewSet(viewsets.ModelViewSet):
                 "passed": serializers.BooleanField(),
             },
         ),
-        responses={200: OpenApiTypes.OBJECT},
-        description="Submit a challenge solution and update user progress.",
+        responses={
+            200: OpenApiTypes.OBJECT,
+            400: OpenApiTypes.OBJECT,
+        },
+        description="Submit client-side validation result and update challenge progress.",
     )
     @decorators.action(detail=True, methods=["post"])
     def submit(self, request, slug=None):
         challenge = self.get_object()
-        passed = request.data.get("passed", False)
+
+        raw_passed = request.data.get("passed", None)
+        if raw_passed is None:
+            raw_passed = request.query_params.get("passed", None)
+
+        if isinstance(raw_passed, bool):
+            passed = raw_passed
+        elif isinstance(raw_passed, str):
+            passed = raw_passed.strip().lower() in {"1", "true", "yes", "on"}
+        elif isinstance(raw_passed, (int, float)):
+            passed = raw_passed == 1
+        else:
+            passed = False
+
+        if not passed:
+            return Response(
+                {
+                    "status": "failed",
+                    "error": "Client-side validation failed.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         result = ChallengeService.process_submission(request.user, challenge, passed)
         return Response(result, status=status.HTTP_200_OK)
 
@@ -244,17 +306,13 @@ class ChallengeViewSet(viewsets.ModelViewSet):
             )
 
         ai_url = os.getenv("AI_SERVICE_URL", "http://ai:8002")
-        internal_key = os.getenv("INTERNAL_API_KEY")
         payload = {
             "user_code": request.data.get("user_code", ""),
             "challenge_slug": challenge.slug,
             "hint_level": hint_level,
             "user_xp": user.profile.xp,
         }
-        headers = {
-            "X-Internal-API-Key": internal_key,
-            "Content-Type": "application/json",
-        }
+        headers = _build_internal_headers("/hints")
 
         try:
             resp = requests.post(
@@ -268,10 +326,7 @@ class ChallengeViewSet(viewsets.ModelViewSet):
                 body.setdefault("hint_level", hint_level)
                 body.setdefault("max_hints", 3)
                 return Response(body, status=status.HTTP_200_OK)
-            return Response(
-                {"error": "AI Service Error", "details": resp.text},
-                status=resp.status_code,
-            )
+            return Response({"error": "AI Service Error"}, status=resp.status_code)
         except requests.exceptions.RequestException as e:
             logger.error("AI Connection Error: %s", e)
             return Response(
@@ -294,15 +349,11 @@ class ChallengeViewSet(viewsets.ModelViewSet):
         challenge = self.get_object()
 
         ai_url = os.getenv("AI_SERVICE_URL", "http://ai:8002")
-        internal_key = os.getenv("INTERNAL_API_KEY")
         payload = {
             "user_code": request.data.get("user_code", ""),
             "challenge_slug": challenge.slug,
         }
-        headers = {
-            "X-Internal-API-Key": internal_key,
-            "Content-Type": "application/json",
-        }
+        headers = _build_internal_headers("/analyze")
 
         try:
             resp = requests.post(
@@ -310,10 +361,7 @@ class ChallengeViewSet(viewsets.ModelViewSet):
             )
             if resp.status_code == 200:
                 return Response(resp.json(), status=status.HTTP_200_OK)
-            return Response(
-                {"error": "AI Service Error", "details": resp.text},
-                status=resp.status_code,
-            )
+            return Response({"error": "AI Service Error"}, status=resp.status_code)
         except requests.exceptions.RequestException as e:
             logger.error("AI Connection Error: %s", e)
             return Response(
@@ -339,10 +387,7 @@ class ChallengeViewSet(viewsets.ModelViewSet):
     )
     @decorators.action(detail=True, methods=["get"], url_path="context")
     def internal_context(self, request, slug=None):
-        internal_key = os.getenv("INTERNAL_API_KEY")
-        request_key = request.headers.get("X-Internal-API-Key")
-
-        if not internal_key or request_key != internal_key:
+        if not authorize_internal_request(request):
             return Response({"error": "Unauthorized"}, status=status.HTTP_403_FORBIDDEN)
 
         try:

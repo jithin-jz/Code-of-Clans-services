@@ -68,13 +68,14 @@ async def get_message_history(
     room: str,
     limit: int = 50,
     offset: int = 0,
-    token: str | None = None,
 ):
     """Get paginated message history for a room."""
+    token = None
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header.split(" ", 1)[1]
     if not token:
-        auth_header = request.headers.get("authorization", "")
-        if auth_header.lower().startswith("bearer "):
-            token = auth_header.split(" ", 1)[1]
+        token = request.cookies.get(JWT_ACCESS_COOKIE_NAME)
     # Verify token
     payload = verify_jwt(token or "")
     if not payload:
@@ -153,12 +154,17 @@ async def get_message_history(
 
 def verify_jwt(token: str) -> dict | None:
     try:
-        return jwt.decode(
+        payload = jwt.decode(
             token,
             JWT_PUBLIC_KEY,
             algorithms=[ALGORITHM],
             options={"require": ["exp"]},
         )
+        if payload.get("type") != "access":
+            return None
+        if "user_id" not in payload:
+            return None
+        return payload
     except jwt.PyJWTError:
         return None
 
@@ -300,13 +306,12 @@ notification_manager = NotificationManager()
 @app.websocket("/ws/chat/{room}")
 async def chat_ws(ws: WebSocket, room: str):
     # ---- Auth ----
-    token = ws.query_params.get("token")
+    token = None
     
     # Fallback to header (for non-browser clients)
-    if not token:
-        auth = ws.headers.get("authorization")
-        if auth and auth.startswith("Bearer "):
-            token = auth.split(" ", 1)[1]
+    auth = ws.headers.get("authorization")
+    if auth and auth.startswith("Bearer "):
+        token = auth.split(" ", 1)[1]
     if not token:
         token = ws.cookies.get(JWT_ACCESS_COOKIE_NAME)
 
@@ -453,7 +458,10 @@ async def chat_ws(ws: WebSocket, room: str):
 @app.websocket("/ws/notifications")
 async def notifications_ws(ws: WebSocket):
     # ---- Auth ----
-    token = ws.query_params.get("token")
+    token = None
+    auth = ws.headers.get("authorization")
+    if auth and auth.startswith("Bearer "):
+        token = auth.split(" ", 1)[1]
     if not token:
         token = ws.cookies.get(JWT_ACCESS_COOKIE_NAME)
     

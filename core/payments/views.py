@@ -218,5 +218,6 @@ class VerifyPaymentView(views.APIView):
                     status=status.HTTP_503_SERVICE_UNAVAILABLE,
                 )
             return Response(
-                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Payment verification failed"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

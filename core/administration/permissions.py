@@ -9,7 +9,7 @@ class IsAdminUser(BasePermission):
     `is_staff` or `is_superuser` in each view.
     """
 
-    def has_permission(self, request, view):
+    def has_permission(self, request, _view):
         return (
             request.user
             and request.user.is_authenticated

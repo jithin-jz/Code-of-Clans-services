@@ -1,4 +1,5 @@
 import logging
+import hmac
 from datetime import datetime, timedelta, timezone
 
 import requests
@@ -14,6 +15,7 @@ from .models import EmailOTP
 from .utils import (
     generate_tokens,
     generate_otp_code,
+    hash_otp,
     get_github_access_token,
     get_github_user,
     get_github_user_email,
@@ -245,8 +247,9 @@ class AuthService:
             raise ValidationError("Too many OTP requests. Please try again later.")
 
         otp_code = generate_otp_code()
+        otp_hash = hash_otp(email, otp_code)
 
-        EmailOTP.objects.create(email=email, otp=otp_code)
+        EmailOTP.objects.create(email=email, otp=otp_hash)
 
         if settings.OTP_EMAIL_ASYNC:
             try:
@@ -271,7 +274,7 @@ class AuthService:
     @staticmethod
     def verify_otp(email, otp):
         """Verifies the OTP and logs the user in (or creates them)."""
-        logger.info(f"Verifying OTP for {email} with code {otp}")
+        logger.info("Verifying OTP for %s", email)
 
         email = email.lower().strip()
         otp = otp.strip()
@@ -284,12 +287,20 @@ class AuthService:
 
         expiry_time = datetime.now(timezone.utc) - timedelta(minutes=10)
 
-        try:
-            otp_record = EmailOTP.objects.filter(
-                email__iexact=email, otp=otp, created_at__gte=expiry_time
-            ).latest("created_at")
+        otp_hash = hash_otp(email, otp)
+        otp_candidates = list(
+            EmailOTP.objects.filter(
+                email__iexact=email,
+                created_at__gte=expiry_time,
+            )
+            .order_by("-created_at")[:5]
+        )
+        otp_record = next(
+            (item for item in otp_candidates if hmac.compare_digest(item.otp, otp_hash)),
+            None,
+        )
 
-        except EmailOTP.DoesNotExist:
+        if otp_record is None:
             logger.warning(f"OTP not found or expired for {email}")
             attempts = cache.get(attempts_key, 0) + 1
             cache.set(

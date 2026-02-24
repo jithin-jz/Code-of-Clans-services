@@ -24,7 +24,11 @@ class XPService:
             with transaction.atomic():
                 profile = UserProfile.objects.select_for_update().get(user=user)
 
-                profile.xp += amount
+                new_total = profile.xp + amount
+                if new_total < 0:
+                    raise ValueError("Insufficient XP")
+
+                profile.xp = new_total
                 profile.save()
 
                 logger.info(

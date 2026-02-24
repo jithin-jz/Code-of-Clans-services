@@ -9,6 +9,7 @@ from .utils import send_fcm_push
 
 @receiver(m2m_changed, sender=Post.likes.through)
 def create_like_notification(sender, instance, action, pk_set, **kwargs):
+    _ = sender, kwargs
     if action == "post_add":
         for user_id in pk_set:
             actor = User.objects.get(pk=user_id)
@@ -29,6 +30,7 @@ def create_like_notification(sender, instance, action, pk_set, **kwargs):
 
 @receiver(post_save, sender=UserFollow)
 def create_follow_notification(sender, instance, created, **kwargs):
+    _ = sender, kwargs
     if created:
         Notification.objects.create(
             recipient=instance.following,

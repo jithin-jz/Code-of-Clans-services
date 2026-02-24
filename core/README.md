@@ -17,7 +17,7 @@ The service is organized into modular Django apps:
 
 - `users/`: Custom user model, profile management, and authentication logic.
 - `auth/`: Social OAuth integrations (GitHub, Google).
-- `challenges/`: Core game logic, level management, and code execution validation.
+- `challenges/`: Core game logic, level management, and challenge test definitions.
 - `rewards/`: XP system, badges, and certificate generation.
 - `payments/`: Razorpay order processing and transaction history.
 - `posts/`: Community features, image sharing, and social interactions.
@@ -54,7 +54,7 @@ The service is organized into modular Django apps:
    pip install -r requirements.txt
    ```
 4. **Environment Variables:**
-   Copy `.env.example` to `.env` and fill in your credentials.
+   Configure `.env` and fill in your credentials.
 5. **Run Migrations:**
    ```bash
    python manage.py migrate
