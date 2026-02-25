@@ -4,7 +4,7 @@ metadata:
   name: core-migrate
   namespace: coc
 spec:
-  backoffLimit: 3
+  backoffLimit: 0
   template:
     spec:
       restartPolicy: OnFailure
@@ -20,6 +20,6 @@ spec:
             ]
           envFrom:
             - configMapRef:
-                name: core-config
+                name: coc-config
             - secretRef:
                 name: coc-secrets
