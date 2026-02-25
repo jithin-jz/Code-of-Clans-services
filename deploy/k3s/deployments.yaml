@@ -142,7 +142,7 @@ spec:
             - containerPort: 8001
           envFrom:
             - configMapRef:
-                name: chat-config
+                name: coc-config
             - secretRef:
                 name: coc-secrets
           readinessProbe:
@@ -188,7 +188,7 @@ spec:
             - containerPort: 8002
           envFrom:
             - configMapRef:
-                name: ai-config
+                name: coc-config
             - secretRef:
                 name: coc-secrets
           readinessProbe:
