@@ -1,0 +1,54 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: coc-api
+  namespace: coc
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  tls:
+    - hosts:
+        - api.coc.example.com
+      secretName: coc-api-tls
+  rules:
+    - host: api.coc.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: core
+                port:
+                  number: 8000
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: core
+                port:
+                  number: 8000
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: core
+                port:
+                  number: 8000
+          - path: /ws/chat
+            pathType: Prefix
+            backend:
+              service:
+                name: chat
+                port:
+                  number: 8001
+          - path: /ws/notifications
+            pathType: Prefix
+            backend:
+              service:
+                name: chat
+                port:
+                  number: 8001

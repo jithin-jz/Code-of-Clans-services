@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: core-migrate
+  namespace: coc
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: ghcr.io/your-org/coc-core:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            [
+              "sh",
+              "-c",
+              "python manage.py migrate && python manage.py collectstatic --noinput",
+            ]
+          envFrom:
+            - configMapRef:
+                name: core-config
+            - secretRef:
+                name: coc-secrets
