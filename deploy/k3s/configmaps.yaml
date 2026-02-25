@@ -1,48 +1,25 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: core-config
+  name: coc-config
   namespace: coc
 data:
   DEBUG: "false"
-  ALLOWED_HOSTS: "api.coc.example.com,localhost,127.0.0.1"
-  FRONTEND_URL: "https://coc.vercel.app"
-  BACKEND_URL: "https://api.coc.example.com"
-  CORS_ALLOWED_ORIGINS: "https://coc.vercel.app"
-  CORS_ALLOWED_ORIGIN_REGEXES: "^https://.*\\.vercel\\.app$"
-  CSRF_TRUSTED_ORIGINS: "https://coc.vercel.app,https://api.coc.example.com"
-  DB_HOST: "your-rds-endpoint.rds.amazonaws.com"
-  DB_PORT: "5432"
-  AI_SERVICE_URL: "http://ai:8002"
-  JWT_COOKIE_SECURE: "true"
-  JWT_COOKIE_SAMESITE: "None"
-  JWT_RETURN_TOKENS_IN_BODY: "false"
-  SECURE_SSL_REDIRECT: "true"
-  SECURE_HSTS_SECONDS: "31536000"
-  SECURE_HSTS_INCLUDE_SUBDOMAINS: "true"
-  SECURE_HSTS_PRELOAD: "true"
-  OTP_EMAIL_ASYNC: "true"
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: chat-config
-  namespace: coc
-data:
-  JWT_ACCESS_COOKIE_NAME: "access_token"
-  AWS_REGION: "us-east-1"
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: ai-config
-  namespace: coc
-data:
-  CORE_SERVICE_URL: "http://core:8000"
-  LLM_PROVIDER: "groq"
-  MODEL_NAME: "llama-3.3-70b-versatile"
-  OPENAI_API_BASE: "https://api.groq.com/openai/v1"
+  ALLOWED_HOSTS: "api-coc.jithin.site,13.205.198.225,localhost,.coc.svc.cluster.local,10.42.0.0/16"
+  FRONTEND_URL: "https://clashcode.jithin.site"
+  BACKEND_URL: "https://api-coc.jithin.site"
+  CORS_ALLOWED_ORIGINS: "https://clashcode.jithin.site"
+  CSRF_TRUSTED_ORIGINS: "https://clashcode.jithin.site,https://api-coc.jithin.site"
   EMBEDDING_MODEL: "sentence-transformers/all-MiniLM-L6-v2"
-  CHROMA_SERVER_HOST: "your-chroma-host"
-  CHROMA_SERVER_HTTP_PORT: "8000"
-  CORS_ORIGINS: "https://coc.vercel.app"
+  
+  # --- Database Connection ---
+  DB_HOST: "db.eslnbxmjlmhychgvqfpt.supabase.co"
+  DB_PORT: "5432"
+  
+  # --- Region & Time ---
+  AWS_REGION: "ap-south-1" 
+  TIME_ZONE: "Asia/Kolkata"
+
+  # --- Service URLs (Internal K8s) ---
+  AI_SERVICE_URL: "http://ai:8002"
+  CHAT_SERVICE_URL: "http://chat:8001"
