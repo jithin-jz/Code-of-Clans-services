@@ -20,6 +20,14 @@ data:
   AWS_REGION: "ap-south-1" 
   TIME_ZONE: "Asia/Kolkata"
 
+  # --- AI Service Settings ---
+  CORE_SERVICE_URL: "http://core:8000"
+  MODEL_NAME: "llama-3.3-70b-versatile"
+  OPENAI_API_BASE: "https://api.groq.com/openai/v1"
+  CHROMA_SERVER_HOST: "chroma"
+  CHROMA_SERVER_HTTP_PORT: "8000"
+  CORS_ORIGINS: "http://localhost:5173,http://localhost,https://clashcode.jithin.site,https://api-coc.jithin.site"
+
   # --- Service URLs (Internal K8s) ---
   AI_SERVICE_URL: "http://ai:8002"
   CHAT_SERVICE_URL: "http://chat:8001"

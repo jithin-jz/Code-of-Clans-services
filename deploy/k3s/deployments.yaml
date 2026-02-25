@@ -210,3 +210,31 @@ spec:
             limits:
               cpu: 400m
               memory: 400Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chroma
+  namespace: coc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chroma
+  template:
+    metadata:
+      labels:
+        app: chroma
+    spec:
+      containers:
+        - name: chroma
+          image: chromadb/chroma:latest
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
