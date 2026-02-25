@@ -3,40 +3,13 @@ kind: Ingress
 metadata:
   name: coc-api
   namespace: coc
-  annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web, websecure
-    traefik.ingress.kubernetes.io/router.tls: "true"
 spec:
-  tls:
-    - hosts:
-        - api-coc.jithin.site
-      secretName: coc-api-tls
+  ingressClassName: traefik
   rules:
     - host: api-coc.jithin.site
       http:
         paths:
           - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: core
-                port:
-                  number: 8000
-          - path: /api
-            pathType: Prefix
-            backend:
-              service:
-                name: core
-                port:
-                  number: 8000
-          - path: /admin
-            pathType: Prefix
-            backend:
-              service:
-                name: core
-                port:
-                  number: 8000
-          - path: /health
             pathType: Prefix
             backend:
               service:
@@ -57,3 +30,13 @@ spec:
                 name: chat
                 port:
                   number: 8001
+    # Catch-all rule for IP access
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: core
+                port:
+                  number: 8000
