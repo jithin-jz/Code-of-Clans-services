@@ -20,6 +20,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Lowercase repo name
+        run: |
+          echo "REPO_LOWER=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
       - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
@@ -32,18 +36,18 @@ jobs:
         with:
           context: ./core
           push: true
-          tags: ${{ env.REGISTRY }}/${{ github.repository }}-core:latest
+          tags: ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}-core:latest
 
       - name: Build and push Chat service
         uses: docker/build-push-action@v5
         with:
           context: ./chat
           push: true
-          tags: ${{ env.REGISTRY }}/${{ github.repository }}-chat:latest
+          tags: ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}-chat:latest
 
       - name: Build and push AI service
         uses: docker/build-push-action@v5
         with:
           context: ./ai
           push: true
-          tags: ${{ env.REGISTRY }}/${{ github.repository }}-ai:latest
+          tags: ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}-ai:latest
