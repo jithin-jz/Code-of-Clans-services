@@ -40,11 +40,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: chromadb
+  name: vector-db
   namespace: coc
 spec:
   selector:
-    app: chromadb
+    app: vector-db
   ports:
     - name: http
       port: 8000

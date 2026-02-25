@@ -24,9 +24,9 @@ data:
   CORE_SERVICE_URL: "http://core:8000"
   MODEL_NAME: "llama-3.3-70b-versatile"
   OPENAI_API_BASE: "https://api.groq.com/openai/v1"
-  CHROMA_SERVER_HOST: "chromadb"
+  CHROMA_SERVER_HOST: "vector-db"
   CHROMA_SERVER_HTTP_PORT: "8000"
-  ROLLOUT_ID: "vfinal"
+  ROLLOUT_ID: "vfinal_v2"
 
   # --- Service URLs (Internal K8s) ---
   AI_SERVICE_URL: "http://ai:8002"

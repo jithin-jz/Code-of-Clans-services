@@ -28,16 +28,16 @@ spec:
             httpGet:
               path: /health/
               port: 8000
-            initialDelaySeconds: 45
+            initialDelaySeconds: 60
             periodSeconds: 20
-            failureThreshold: 5
+            failureThreshold: 10
           livenessProbe:
             httpGet:
               path: /health/
               port: 8000
-            initialDelaySeconds: 90
+            initialDelaySeconds: 120
             periodSeconds: 30
-            failureThreshold: 3
+            failureThreshold: 5
           resources:
             requests:
               cpu: 50m
@@ -157,9 +157,9 @@ spec:
             httpGet:
               path: /
               port: 8001
-            initialDelaySeconds: 90
+            initialDelaySeconds: 120
             periodSeconds: 30
-            failureThreshold: 3
+            failureThreshold: 5
           resources:
             requests:
               cpu: 50m
@@ -204,9 +204,9 @@ spec:
             httpGet:
               path: /health
               port: 8002
-            initialDelaySeconds: 120
+            initialDelaySeconds: 180
             periodSeconds: 30
-            failureThreshold: 3
+            failureThreshold: 5
           resources:
             requests:
               cpu: 100m
@@ -218,20 +218,20 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: chromadb
+  name: vector-db
   namespace: coc
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: chromadb
+      app: vector-db
   template:
     metadata:
       labels:
-        app: chromadb
+        app: vector-db
     spec:
       containers:
-        - name: chromadb
+        - name: vector-db
           image: chromadb/chroma:latest
           ports:
             - containerPort: 8000
