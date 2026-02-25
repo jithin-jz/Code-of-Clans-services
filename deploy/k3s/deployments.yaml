@@ -30,14 +30,16 @@ spec:
               port: 8000
             initialDelaySeconds: 60
             periodSeconds: 20
-            failureThreshold: 10
+            timeoutSeconds: 10
+            failureThreshold: 15
           livenessProbe:
             httpGet:
               path: /health/
               port: 8000
             initialDelaySeconds: 120
             periodSeconds: 30
-            failureThreshold: 5
+            timeoutSeconds: 10
+            failureThreshold: 10
           resources:
             requests:
               cpu: 50m
@@ -159,7 +161,8 @@ spec:
               port: 8001
             initialDelaySeconds: 120
             periodSeconds: 30
-            failureThreshold: 5
+            timeoutSeconds: 10
+            failureThreshold: 10
           resources:
             requests:
               cpu: 50m
@@ -206,7 +209,8 @@ spec:
               port: 8002
             initialDelaySeconds: 180
             periodSeconds: 30
-            failureThreshold: 5
+            timeoutSeconds: 10
+            failureThreshold: 10
           resources:
             requests:
               cpu: 100m
