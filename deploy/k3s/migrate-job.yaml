@@ -10,7 +10,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: migrate
-          image: ghcr.io/your-org/coc-core:latest
+          image: ghcr.io/jithin-jz/clash-of-code-services-core:latest
           imagePullPolicy: IfNotPresent
           command:
             [
