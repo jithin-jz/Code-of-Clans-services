@@ -6,8 +6,7 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     traefik.ingress.kubernetes.io/router.entrypoints: web, websecure
-    traefik.ingress.kubernetes.io/router.middlewares: coc-strip-ai-prefix@kubernetescrd
-
+    traefik.ingress.kubernetes.io/router.middlewares: coc-coc-strip-ai-prefix@kubernetescrd
 spec:
   ingressClassName: traefik
   tls:
@@ -18,20 +17,6 @@ spec:
     - host: api-coc.jithin.site
       http:
         paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: core
-                port:
-                  number: 8000
-          - path: /api
-            pathType: Prefix
-            backend:
-              service:
-                name: core
-                port:
-                  number: 8000
           - path: /ws/chat
             pathType: Prefix
             backend:
@@ -46,13 +31,27 @@ spec:
                 name: chat
                 port:
                   number: 8001
-          - path: /ai/
+          - path: /ai
             pathType: Prefix
             backend:
               service:
                 name: ai
                 port:
                   number: 8002
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: core
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: core
+                port:
+                  number: 8000
     # Catch-all rule for IP access (no HTTPS support for bare IP)
     - http:
         paths:

@@ -1,0 +1,9 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: coc-strip-ai-prefix
+  namespace: coc
+spec:
+  stripPrefix:
+    prefixes:
+      - /ai
