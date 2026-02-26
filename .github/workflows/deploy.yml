@@ -62,7 +62,10 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
   # ---------------------------------------------------------------
-  # JOB 2 — Deploy to K3s (runs after all builds succeed)
+  # JOB 2 — Deploy to K3s via SSH (runs after all builds succeed)
+  # Port 6443 (K3s API) is blocked by AWS Security Group, so we
+  # SSH into the server and run kubectl there — port 22 is open
+  # and the server already has kubectl + kubeconfig configured.
   # ---------------------------------------------------------------
   deploy:
     name: Deploy to K3s
@@ -72,43 +75,32 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v4
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
         with:
-          version: "v1.29.0"
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
 
-      - name: Configure kubeconfig
-        # Store the entire kubeconfig file content as a GitHub secret named KUBECONFIG_B64
-        # Generate it with: cat ~/.kube/config | base64 -w 0
-        run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG_B64 }}" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
+            echo "=== Pulling latest images ==="
+            # Force K3s to pull the new :latest images on rollout
+            kubectl rollout restart deployment/core         -n coc
+            kubectl rollout restart deployment/celery-worker -n coc
+            kubectl rollout restart deployment/celery-beat   -n coc
+            kubectl rollout restart deployment/chat         -n coc
+            kubectl rollout restart deployment/ai           -n coc
 
-      - name: Rollout restart all services
-        # imagePullPolicy: Always in deployments.yaml ensures the new :latest is pulled
-        run: |
-          kubectl rollout restart deployment/core        -n coc
-          kubectl rollout restart deployment/celery-worker -n coc
-          kubectl rollout restart deployment/celery-beat  -n coc
-          kubectl rollout restart deployment/chat        -n coc
-          kubectl rollout restart deployment/ai          -n coc
+            echo "=== Waiting for rollouts ==="
+            kubectl rollout status deployment/core          -n coc --timeout=300s
+            kubectl rollout status deployment/chat          -n coc --timeout=300s
+            kubectl rollout status deployment/ai            -n coc --timeout=300s
+            kubectl rollout status deployment/celery-worker -n coc --timeout=120s
+            kubectl rollout status deployment/celery-beat   -n coc --timeout=120s
 
-      - name: Wait for rollouts to complete
-        # Fails the job if any deployment doesn't become healthy within 5 minutes
-        run: |
-          kubectl rollout status deployment/core         -n coc --timeout=300s
-          kubectl rollout status deployment/chat         -n coc --timeout=300s
-          kubectl rollout status deployment/ai           -n coc --timeout=300s
-          kubectl rollout status deployment/celery-worker -n coc --timeout=120s
-          kubectl rollout status deployment/celery-beat  -n coc --timeout=120s
+            echo "=== Verifying health endpoints ==="
+            curl -sf https://api-coc.jithin.site/health/ && echo "Core: OK" || echo "Core: WARN"
+            curl -sf https://api-coc.jithin.site/ai/health && echo "AI: OK" || echo "AI: WARN"
 
-      - name: Verify health endpoints
-        run: |
-          echo "Checking core health..."
-          curl -sf https://api-coc.jithin.site/health/ || echo "Core health check failed (non-blocking)"
-          echo "Checking AI health..."
-          curl -sf https://api-coc.jithin.site/ai/health || echo "AI health check failed (non-blocking)"
+            echo "=== Deploy complete ==="
