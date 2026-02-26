@@ -1,6 +1,6 @@
-from typing import List, Optional
+from pydantic import field_validator, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
+from typing import List, Optional, Union
 
 class Settings(BaseSettings):
     # Service URLs
@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     CHROMA_SERVER_HTTP_PORT: int
     
     # Security
-    CORS_ORIGINS: List[str]
+    CORS_ORIGINS: Union[str, List[str]]
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

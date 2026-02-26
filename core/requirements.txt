@@ -26,3 +26,4 @@ gunicorn==23.0.0
 setuptools<81
 black==24.10.0
 
+whitenoise==6.7.0

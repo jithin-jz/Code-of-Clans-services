@@ -42,11 +42,11 @@ spec:
             failureThreshold: 10
           resources:
             requests:
-              cpu: 50m
-              memory: 128Mi
-            limits:
-              cpu: 300m
+              cpu: 100m
               memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -213,11 +213,11 @@ spec:
             failureThreshold: 10
           resources:
             requests:
-              cpu: 100m
-              memory: 256Mi
+              cpu: 200m
+              memory: 512Mi
             limits:
-              cpu: 400m
-              memory: 400Mi
+              cpu: 600m
+              memory: 800Mi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -239,10 +239,17 @@ spec:
           image: chromadb/chroma:latest
           ports:
             - containerPort: 8000
+          volumeMounts:
+            - name: chroma-data
+              mountPath: /chroma/chroma
           resources:
             requests:
               cpu: 50m
-              memory: 64Mi
+              memory: 128Mi
             limits:
               cpu: 200m
-              memory: 128Mi
+              memory: 256Mi
+      volumes:
+        - name: chroma-data
+          persistentVolumeClaim:
+            claimName: coc-chroma-pvc

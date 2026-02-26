@@ -73,6 +73,7 @@ INSTALLED_APPS.append("cloudinary")
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -187,7 +188,7 @@ CLOUDINARY_STORAGE = {
 
 STORAGES = {
     "default": {"BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage"},
-    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
 
 # Backend URL (for absolute media paths)

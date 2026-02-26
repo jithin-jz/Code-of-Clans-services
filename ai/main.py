@@ -62,15 +62,34 @@ async def global_exception_handler(request, exc: Exception):
 
 # Initialize RAG Components
 # Using local embedding model to save API costs
-embeddings = HuggingFaceInferenceAPIEmbeddings(api_key=settings.HUGGINGFACE_API_KEY, model_name=settings.EMBEDDING_MODEL)
+_vector_db = None
 
-# Connect to stand-alone ChromaDB server
-import chromadb
-vector_db = Chroma(
-    client=chromadb.HttpClient(host=settings.CHROMA_SERVER_HOST, port=settings.CHROMA_SERVER_HTTP_PORT),
-    embedding_function=embeddings,
-    collection_name="challenges"
-)
+def get_vector_db():
+    """Lazy initialization of the vector database to handle connection issues gracefully."""
+    global _vector_db
+    if _vector_db is None:
+        try:
+            logger.info("Initializing Chroma RAG components...")
+            embeddings = HuggingFaceInferenceAPIEmbeddings(
+                api_key=settings.HUGGINGFACE_API_KEY, 
+                model_name=settings.EMBEDDING_MODEL
+            )
+            # Connect to stand-alone ChromaDB server
+            import chromadb
+            _vector_db = Chroma(
+                client=chromadb.HttpClient(
+                    host=settings.CHROMA_SERVER_HOST, 
+                    port=settings.CHROMA_SERVER_HTTP_PORT
+                ),
+                embedding_function=embeddings,
+                collection_name="challenges"
+            )
+            logger.info("Chroma RAG components initialized successfully.")
+        except Exception as e:
+            logger.error(f"Failed to initialize Chroma RAG: {e}")
+            _vector_db = None
+    return _vector_db
+
 
 # --- Models ---
 class HintRequest(BaseModel):
@@ -208,9 +227,15 @@ async def get_rag_context(challenge_description: str, user_code: str, challenge_
     similar_docs = []
     try:
         query = f"Challenge: {challenge_description}\n\nUser Code: {user_code}"
+        
+        vdb = get_vector_db()
+        if vdb is None:
+            logger.warning("Vector DB not available for similarity search.")
+            return "No similar patterns found."
+
         loop = asyncio.get_running_loop()
         results = await loop.run_in_executor(
-            None, lambda: vector_db.similarity_search(query, k=2)
+            None, lambda: vdb.similarity_search(query, k=2)
         )
         similar_docs = [
             doc.page_content

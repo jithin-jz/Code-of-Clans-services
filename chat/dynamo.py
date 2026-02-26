@@ -6,7 +6,7 @@ import logging
 
 # Credentials
 DYNAMODB_URL = os.getenv("DYNAMODB_URL", "http://dynamodb:8000")
-REGION_NAME = os.getenv("AWS_REGION", "us-west-2")
+REGION_NAME = os.getenv("AWS_REGION", "ap-south-1")
 ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID", "dummy")
 SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "dummy")
 TABLE_NAME = "ChatMessages"

@@ -44,6 +44,13 @@ spec:
                 name: chat
                 port:
                   number: 8001
+          - path: /ai/
+            pathType: Prefix
+            backend:
+              service:
+                name: ai
+                port:
+                  number: 8002
     # Catch-all rule for IP access (no HTTPS support for bare IP)
     - http:
         paths:
