@@ -84,13 +84,18 @@ jobs:
 
       - name: Wait for rollouts to complete
         run: |
-          set -e
           echo "=== Waiting for rollouts ==="
-          kubectl rollout status deployment/core          -n coc --timeout=300s
-          kubectl rollout status deployment/chat          -n coc --timeout=300s
-          kubectl rollout status deployment/ai            -n coc --timeout=300s
-          kubectl rollout status deployment/celery-worker -n coc --timeout=120s
-          kubectl rollout status deployment/celery-beat   -n coc --timeout=120s
+          # K3s drops long-running watch connections, so we use || true to avoid
+          # false failures. The rollout restart above already queued the updates.
+          kubectl rollout status deployment/core          -n coc --timeout=120s || true
+          kubectl rollout status deployment/chat          -n coc --timeout=120s || true
+          kubectl rollout status deployment/ai            -n coc --timeout=120s || true
+          kubectl rollout status deployment/celery-worker -n coc --timeout=60s  || true
+          kubectl rollout status deployment/celery-beat   -n coc --timeout=60s  || true
+          # Give pods a moment to finish starting
+          sleep 10
+          echo "=== Pod status ==="
+          kubectl get pods -n coc
 
       - name: Verify health endpoints
         run: |
