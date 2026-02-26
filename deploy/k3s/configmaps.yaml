@@ -16,6 +16,8 @@ data:
   # --- Database Connection ---
   DB_HOST: "aws-1-ap-south-1.pooler.supabase.com"
   DB_PORT: "5432"
+  DB_NAME: "postgres" # Supabase default DB name is usually postgres
+  DB_USER: "postgres" # Supabase default user
   ROLLOUT_ID: "vfinal_v5"
   
   # --- Region & Time ---
