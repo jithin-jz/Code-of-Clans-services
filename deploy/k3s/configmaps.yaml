@@ -23,11 +23,13 @@ data:
   TIME_ZONE: "Asia/Kolkata"
 
   # --- Email Settings ---
-  # Change to "django.core.mail.backends.smtp.EmailBackend" for Gmail
-  EMAIL_BACKEND: "django_ses.SESBackend"
+  # Change to "django_ses.SESBackend" for AWS SES
+  EMAIL_BACKEND: "django.core.mail.backends.smtp.EmailBackend"
   DEFAULT_FROM_EMAIL: "jzdieheart@gmail.com"
+  EMAIL_HOST: "smtp.gmail.com"
+  EMAIL_PORT: "587"
+  EMAIL_USE_TLS: "true"
   OTP_EMAIL_ASYNC: "true"
-  AWS_SES_REGION: "ap-south-1"
 
   # --- AI Service Settings ---
   CORE_SERVICE_URL: "http://core:8000"
