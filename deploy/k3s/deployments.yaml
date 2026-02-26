@@ -13,6 +13,8 @@ spec:
       labels:
         app: core
     spec:
+      securityContext:
+        fsGroup: 10001
       containers:
         - name: core
           image: ghcr.io/jithin-jz/clash-of-code-services-core:latest
@@ -50,10 +52,14 @@ spec:
               cpu: 500m
               memory: 512Mi
           volumeMounts:
+            - name: static-data
+              mountPath: /app/staticfiles
             - name: firebase-key
               mountPath: /etc/firebase
               readOnly: true
       volumes:
+        - name: static-data
+          emptyDir: {}
         - name: firebase-key
           secret:
             secretName: firebase-keys
