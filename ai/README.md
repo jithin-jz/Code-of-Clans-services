@@ -1,64 +1,47 @@
-# 🤖 Clash of Code - AI Service
+# 🤖 AI & Code Analysis Service (FastAPI)
 
-The **AI Service** provides advanced intelligence and tutor features to the platform. Built with **FastAPI** and **LangChain**, it implements a **RAG (Retrieval-Augmented Generation)** architecture to help users solve coding challenges based on project-specific documentation.
+An intelligent agentic service that provides code explanation, optimization tips, and RAG-based context for coding challenges.
 
-## 🚀 Tech Stack
+## ✨ Features
 
-- **Framework:** [FastAPI](https://fastapi.tiangolo.com/)
-- **Orchestration:** [LangChain](https://www.langchain.com/)
-- **Vector Database:** [ChromaDB](https://www.trychroma.com/)
-- **LLM Support:** OpenAI & HuggingFace integration
-- **Embeddings:** Sentence-Transformers
+- **Large Language Model**: Powered by **Groq** (using Llama 3.3 70B) for ultra-fast responses.
+- **RAG (Retrieval Augmented Generation)**: Uses **ChromaDB** to inject relevant documentation and challenge context into the AI's memory.
+- **Asynchronous Processing**: Non-blocking requests for smooth code analysis.
+- **Streaming Responses**: (Optional) Instant feedback as the model generates.
 
-## 📂 Project Structure
+## 🚀 Running Local
 
-- `main.py`: Entry point for the FastAPI application.
-- `llm_factory.py`: Factory pattern for initializing different LLM providers.
-- `prompts.py`: Centralized management of system and user prompts.
-- `config.py`: Configuration management using Pydantic Settings and `.env`.
-- `logger_config.py`: Structured logging setup.
+```bash
+cd services/ai
+pip install -r requirements.txt
 
-## 🛠️ Key Features
+# Start the service
+uvicorn main:app --host 0.0.0.0 --port 8002 --reload
+```
 
-- **RAG-Powered Tutor:** Answers user queries by retrieving relevant context from a knowledge base.
-- **Code Assistance:** Helps users debug and optimize their code during challenges.
-- **Provider Agnostic:** Easily switch between OpenAI, HuggingFace, or local LLMs via configuration.
-- **Streaming Responses:** Supports real-time streaming for a better user experience.
+## 🛠️ Tech Context
 
-## 🔧 Setup & Installation
+### RAG Pipeline
 
-### Prerequisites
-- Python 3.11+
-- ChromaDB (running as a service or local)
+The service embeds your codebase and challenges into a vector space. When a user asks an AI question:
 
-### Local Development
-1. **Navigate to the AI service:**
-   ```bash
-   cd services/ai
-   ```
-2. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. **Environment Variables:**
-   Configure `.env` with required keys:
-   - `CORE_SERVICE_URL`
-   - `INTERNAL_API_KEY`
-   - `GROQ_API_KEY`
-   - `OPENAI_API_BASE`
-   - `MODEL_NAME`
-   - `EMBEDDING_MODEL`
-   - `CHROMA_SERVER_HOST`
-   - `CHROMA_SERVER_HTTP_PORT`
+1. The query is converted to an embedding.
+2. ChromaDB finds the most relevant code snippets/instructions.
+3. The LLM processes the query + retrieved context.
 
-4. **Start the service:**
-   ```bash
-   uvicorn main:app --host 0.0.0.0 --port 8002 --reload
-   ```
+---
 
-## 📡 API Endpoints
+## 🏗️ Technical Settings
 
-- `POST /hints`: Generate challenge hint guidance.
-- `POST /analyze`: Generate code review feedback.
-- `GET /health`: Health check endpoint.
-- `GET /docs`: Interactive Swagger documentation.
+- **`MODEL_NAME`**: Default is `llama-3.3-70b-versatile`.
+- **`CHROMA_SERVER_HOST`**: Vector storage connection.
+- **`EMBEDDING_MODEL`**: `sentence-transformers/all-MiniLM-L6-v2`.
+
+---
+
+## 📂 Structure
+
+- `main.py`: Main API entry point.
+- `ai_logic.py`: Prompt engineering and LLM interaction.
+- `vector_db.py`: ChromaDB integration and search logic.
+- `embeddings.py`: Model definitions for vectorization.

@@ -1,82 +1,90 @@
-# 🏰 Clash of Code - Core Service
+# ⚙️ Core Service (Django)
 
-The **Core Service** is the backbone of the Clash of Code platform. Built with **Django** and **Django REST Framework (DRF)**, it manages user authentication, challenge logic, payments, rewards, and notification systems.
+The central heartbeat of the **Clash of Code** ecosystem. This service manages user identities, persistence, transactions, and background task orchestration.
 
-## 🚀 Tech Stack
+## ✨ Features
 
-- **Framework:** [Django 5.0](https://www.djangoproject.com/)
-- **API:** [Django REST Framework](https://www.django-rest-framework.org/)
-- **Database:** PostgreSQL
-- **Task Queue:** Celery + Redis
-- **Documentation:** drf-spectacular (Swagger/OpenAPI 3.0)
-- **Payments:** Razorpay Integration
+- **Advanced Auth**:
+  - OAuth 2.0 (Google & GitHub).
+  - OTP-based login (Email verification via AWS SES).
+  - Dual-mode JWT (Auth header + HttpOnly Cookies).
+- **Gamification Engine**: Logic for XP, Levels, and Leaderboards.
+- **Store & Payments**: Cosmetic item catalog with Razorpay integration.
+- **Notifications**: Firebase Cloud Messaging (FCM) push notification triggers.
+- **Async Processing**: Robust background tasks via Celery (Redis backend).
 
-## 📂 Project Structure
+## 🚀 Development Setup
 
-The service is organized into modular Django apps:
+### 1. Prerequisites
 
-- `users/`: Custom user model, profile management, and authentication logic.
-- `auth/`: Social OAuth integrations (GitHub, Google).
-- `challenges/`: Core game logic, level management, and challenge test definitions.
-- `rewards/`: XP system, badges, and certificate generation.
-- `payments/`: Razorpay order processing and transaction history.
-- `posts/`: Community features, image sharing, and social interactions.
-- `notifications/`: Real-time system notifications and alerts.
-- `administration/`: Enhanced admin dashboard logic.
+- Python 3.12+
+- Redis (running on default port)
+- PostgreSQL (or Supabase URL)
 
-## 🛠️ Key Features
+### 2. Manual Setup
 
-- **Gamified Learning:** Progress through levels, earn XP, and unlock badges.
-- **Social Integration:** Share your progress, like posts, and compete on leaderboards.
-- **Asynchronous Processing:** Celery handles heavy tasks like certificate generation and email notifications.
-- **Secure Payments:** Integrated Razorpay for premium features and items.
+```bash
+cd services/core
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 
-## 🔧 Setup & Installation
+# Initial migrations
+python manage.py migrate
 
-### Prerequisites
-- Python 3.11+
-- Redis
-- PostgreSQL
+# Seed data
+python manage.py load_levels   # Challenges
+python manage.py seed_store     # Store items
 
-### Local Development
-1. **Clone the repository:**
-   ```bash
-   git clone <repo-url>
-   cd services/core
-   ```
-2. **Create a virtual environment:**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # Windows: venv\\Scripts\\activate
-   ```
-3. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. **Environment Variables:**
-   Configure `.env` and fill in your credentials.
-5. **Run Migrations:**
-   ```bash
-   python manage.py migrate
-   ```
-6. **Start the server:**
-   ```bash
-   python manage.py runserver 8000
-   ```
+# Start the server
+python manage.py runserver 8000
+```
 
-## 📡 API Documentation
+### 3. Running Workers
 
-Once the server is running, access the interactive API docs at:
-- **Swagger UI:** `http://localhost:8000/api/docs/`
-- **Redoc:** `http://localhost:8000/api/redoc/`
+```bash
+# Background task worker
+celery -A project worker -l info
 
-## 👷 Worker Commands
+# Scheduled tasks (Leaderboard/Cleanup)
+celery -A project beat -l info
+```
 
-- **Start Celery Worker:**
-  ```bash
-  celery -A project worker --loglevel=info
-  ```
-- **Start Celery Beat:**
-  ```bash
-  celery -A project beat --loglevel=info
-  ```
+## 📊 Core API Endpoints
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/auth/otp/` | POST | Request login code. |
+| `/auth/login/` | POST | Verify OTP & get JWT. |
+| `/challenges/` | GET | List available coding challenges. |
+| `/store/items/` | GET | List cosmetic items. |
+| `/health/` | GET | Service status & healthcheck. |
+
+---
+
+## 🏗️ Technical Notes
+
+### JWT Symmetric Signing
+
+The service uses **RS256** asymmetric keys.
+
+- **`JWT_PRIVATE_KEY`**: Used by Core to sign tokens.
+- **`JWT_PUBLIC_KEY`**: Shared with Chat/AI services to verify identity without database lookups.
+
+### Database Seeding
+
+The project bundles several management commands for bootstrapping production data:
+
+- `python manage.py createsuperuser`
+- `python manage.py load_levels` (requires `challenges/levels.py`)
+- `python manage.py seed_store` (requires `store/seed_store.py`)
+
+---
+
+## 📂 Structure
+
+- `auth/`: Authentication logic & OAuth callback handlers.
+- `challenges/`: Level management and challenge definitions.
+- `notifications/`: Firebase push logic (utils.py).
+- `project/`: Main settings, WSGI/ASGI, and Celery config.
+- `store/`: Cosmetic items and purchase logic.

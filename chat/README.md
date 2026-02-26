@@ -1,63 +1,54 @@
-# 💬 Clash of Code - Chat Service
+# 💬 Chat & Real-Time Service (FastAPI)
 
-The **Chat Service** enables real-time communication between users on the platform. It leverages **FastAPI's WebSocket** support and **Redis Pub/Sub** to provide a scalable, low-latency messaging experience.
+A high-concurrency WebSocket server handling all real-time interactions, including room-based messaging and global system notifications.
 
-## 🚀 Tech Stack
+## ✨ Features
 
-- **Framework:** [FastAPI](https://fastapi.tiangolo.com/)
-- **Communication:** WebSockets
-- **State Management:** Redis (Pub/Sub and Caching)
-- **Database:** PostgreSQL (via [SQLModel](https://sqlmodel.tiangolo.com/))
-- **Security:** JWT Authentication
+- **WebSockets**: Permanent bidirectional connections for instant messaging.
+- **Redis Pub/Sub**: Scales horizontal delivery across multiple pod instances.
+- **Stateless Auth**: Verifies user identity via shared JWT Public Key.
+- **Notification Types**:
+  - Global Announcement (broadcast).
+  - Room Messages (targeted).
+  - Personal System Alerts (private).
 
-## 📂 Project Structure
+## 🚀 Running Local
 
-- `main.py`: WebSocket manager and route handlers.
-- `models.py`: SQLModel definitions for chat messages and rooms.
-- `schemas.py`: Pydantic models for request/response validation.
-- `rate_limiter.py`: In-memory and Redis-backed rate limiting for messages.
-- `database.py`: Session management for the chat database.
+```bash
+cd services/chat
+pip install -r requirements.txt
 
-## 🛠️ Key Features
+# Start the service
+uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+```
 
-- **Real-Time Messaging:** Instant message delivery via WebSockets.
-- **Global & Private Channels:** Support for different chat contexts.
-- **Message Persistence:** Chat history is stored in a dedicated PostgreSQL database.
-- **Security:** Endpoints and WebSocket connections are secured with JWT from the Core service.
-- **Rate Limiting:** Protects the service from spam and abuse.
+## 🔌 WebSocket API
 
-## 🔧 Setup & Installation
+**URL**: `ws://api-coc.jithin.site/ws/{room_name}/?token={JWT}`
 
-### Prerequisites
-- Python 3.11+
-- Redis
-- PostgreSQL (Chat DB)
+### Example Message Protocol (JSON)
 
-### Local Development
-1. **Navigate to the Chat service:**
-   ```bash
-   cd services/chat
-   ```
-2. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. **Environment Variables:**
-   Configure `.env` with:
-   - `DATABASE_URL` (PostgreSQL connection string)
-   - `REDIS_URL`
-   - `JWT_PUBLIC_KEY` (Must match Core service public key)
-   - `JWT_ACCESS_COOKIE_NAME` (defaults to `access_token`)
+```json
+{
+  "content": "Hello World!",
+  "type": "message"
+}
+```
 
-4. **Start the service:**
-   ```bash
-   uvicorn main:app --host 0.0.0.0 --port 8001 --reload
-   ```
+---
 
-## 📡 WebSocket Protocol
+## 🏗️ Architecture
 
-Connect to `ws://localhost/ws/chat/{room_id}` with a valid JWT:
-- Preferred: HttpOnly cookie (`access_token`)
-- Fallback: `Authorization: Bearer <token>` header (non-browser clients)
-- **Format:** JSON
-- **Events:** `message`, `join`, `leave`, `typing`
+1. **Connection**: Client establishes WS connection with a JWT.
+2. **Auth**: The service decodes the JWT using the `JWT_PUBLIC_KEY` (No DB query required).
+3. **Tracking**: Active connections are stored in memory (`ConnectionManager`).
+4. **Broadcast**: Messages are published to Redis, and all listening instances relay to their connected clients.
+
+---
+
+## 📂 Structure
+
+- `main.py`: App initialization and route definitions.
+- `manager.py`: Logic for managing active WebSocket connections.
+- `auth.py`: JWT verification logic using asymmetric keys.
+- `redis_client.py`: Redis Pub/Sub integration.
