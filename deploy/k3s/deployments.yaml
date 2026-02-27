@@ -15,23 +15,16 @@ spec:
     spec:
       securityContext:
         fsGroup: 10001
-      initContainers:
-        - name: collectstatic
-          image: ghcr.io/jithin-jz/clash-of-code-services-core:latest
-          imagePullPolicy: Always
-          command: ["python", "manage.py", "collectstatic", "--noinput"]
-          envFrom:
-            - configMapRef:
-                name: coc-config
-            - secretRef:
-                name: coc-secrets
-          volumeMounts:
-            - name: static-data
-              mountPath: /app/staticfiles
       containers:
         - name: core
           image: ghcr.io/jithin-jz/clash-of-code-services-core:latest
           imagePullPolicy: Always
+          command:
+            - /bin/sh
+            - -c
+            - |
+              python manage.py collectstatic --noinput --clear
+              exec gunicorn project.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120
           ports:
             - containerPort: 8000
           envFrom:
@@ -44,7 +37,7 @@ spec:
               path: /health/
               port: 8000
               scheme: HTTP
-            initialDelaySeconds: 60
+            initialDelaySeconds: 90
             periodSeconds: 20
             timeoutSeconds: 10
             failureThreshold: 15
@@ -53,7 +46,7 @@ spec:
               path: /health/
               port: 8000
               scheme: HTTP
-            initialDelaySeconds: 120
+            initialDelaySeconds: 150
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 10
