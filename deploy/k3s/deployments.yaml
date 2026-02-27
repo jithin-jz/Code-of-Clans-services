@@ -19,12 +19,6 @@ spec:
         - name: core
           image: ghcr.io/jithin-jz/clash-of-code-services-core:latest
           imagePullPolicy: Always
-          command:
-            - /bin/sh
-            - -c
-            - |
-              python manage.py collectstatic --noinput --clear
-              exec gunicorn project.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120
           ports:
             - containerPort: 8000
           envFrom:
@@ -37,7 +31,7 @@ spec:
               path: /health/
               port: 8000
               scheme: HTTP
-            initialDelaySeconds: 90
+            initialDelaySeconds: 60
             periodSeconds: 20
             timeoutSeconds: 10
             failureThreshold: 15
@@ -46,7 +40,7 @@ spec:
               path: /health/
               port: 8000
               scheme: HTTP
-            initialDelaySeconds: 150
+            initialDelaySeconds: 120
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 10
@@ -58,14 +52,10 @@ spec:
               cpu: 500m
               memory: 512Mi
           volumeMounts:
-            - name: static-data
-              mountPath: /app/staticfiles
             - name: firebase-key
               mountPath: /etc/firebase
               readOnly: true
       volumes:
-        - name: static-data
-          emptyDir: {}
         - name: firebase-key
           secret:
             secretName: firebase-keys

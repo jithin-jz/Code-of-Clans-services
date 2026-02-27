@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     curl \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd -m -u 10001 appuser
+    && useradd -m -u 10001 -g 10001 -G 10001 appuser || useradd -m -u 10001 appuser
 
 COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -20,8 +20,14 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 COPY --chown=appuser:appuser . .
 
-# staticfiles dir must be writable (collectstatic runs at startup via compose command)
-RUN mkdir -p staticfiles && chown -R appuser:appuser staticfiles
+# Collect static files at BUILD TIME (baked into the image)
+# Dummy credentials satisfy settings.py validation — nothing actually connects
+RUN SECRET_KEY=build-collect-static-dummy-key \
+    DB_NAME=dummy DB_USER=dummy DB_PASSWORD=dummy DB_HOST=localhost DB_PORT=5432 \
+    CLOUDINARY_CLOUD_NAME=dummy CLOUDINARY_API_KEY=dummy CLOUDINARY_API_SECRET=dummy \
+    python manage.py collectstatic --noinput
+
+RUN chown -R appuser:appuser staticfiles
 
 EXPOSE 8000
 
