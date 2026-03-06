@@ -361,7 +361,7 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = "jzdieheart@gmail.com"
 EMAIL_HOST_PASSWORD = "nrko gatv zahv megs"
 
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "jzdieheart@gmail.com")
+DEFAULT_FROM_EMAIL = "Clash of Code <jzdieheart@gmail.com>"
 OTP_EMAIL_ASYNC = os.getenv("OTP_EMAIL_ASYNC", "true").lower() == "true"
 
 # Razorpay
