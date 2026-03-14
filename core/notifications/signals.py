@@ -7,7 +7,7 @@ from .models import Notification
 from .utils import send_fcm_push
 
 
-@receiver(m2m_changed, sender=Post.likes.through)
+@receiver(m2m_changed, sender=Post.likes.through, dispatch_uid="create_like_notification_signal")
 def create_like_notification(sender, instance, action, pk_set, **kwargs):
     _ = sender, kwargs
     if action == "post_add":
@@ -28,7 +28,7 @@ def create_like_notification(sender, instance, action, pk_set, **kwargs):
                 )
 
 
-@receiver(post_save, sender=UserFollow)
+@receiver(post_save, sender=UserFollow, dispatch_uid="create_follow_notification_signal")
 def create_follow_notification(sender, instance, created, **kwargs):
     _ = sender, kwargs
     if created:
